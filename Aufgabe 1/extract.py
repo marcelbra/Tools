@@ -36,25 +36,30 @@ class HTMLToText(HTMLParser):
         html = self.get_doc_by_path()
         pattern = r"<p.*>(\n*.*?)<\/p>"
         paragraphs = re.findall(pattern, html)
-        for paragraph in paragraphs:
-            print(paragraph)
+        return paragraphs
 
     def get_headline(self):
         html = self.get_doc_by_path()
         title_pattern = r"\"headline\"\s:\s(.*),"
         title = re.findall(title_pattern, html)
-        print(" ".join(title))
+        return title
 
-    def get_descritption(self):
+    def get_description(self):
         html = self.get_doc_by_path()
         description_pattern = r"\"description\"\s:\s(.*),"
         description = re.findall(description_pattern, html)
-        print(" ".join(description))
+        return description
 
+    def save_text(self, file_name, title, description, paragraphs):
+        with open(file_name, "w") as f:
+            f.write(" ".join(title) + "\n"
+                    + " ".join(description) + "\n"
+                    + " ".join(paragraphs))
 
 
 
 html_to_text = HTMLToText()
-html_to_text.get_headline()
-html_to_text.get_descritption()
-html_to_text.get_paragraph()
+title = html_to_text.get_headline()
+desc = html_to_text.get_description()
+text = html_to_text.get_paragraph()
+html_to_text.save_text("text.txt", title, desc, text)
