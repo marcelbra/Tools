@@ -8,6 +8,7 @@ from html.parser import HTMLParser
 
 class HTMLToText(HTMLParser):
 
+
     def __init__(self):
         super(HTMLToText, self).__init__()#)convert_charrefs=True)
         self.docs = []
@@ -26,7 +27,7 @@ class HTMLToText(HTMLParser):
                         return html
 
     def get_doc_by_path(self,
-                        path="./data/www.tagesschau.de/inland/buchpreis-strubel-101.html"
+                        path="www.tagesschau.de/ausland/afrika/fossile-brennstoffe-unep-101.html"
                         ):
         with open(path) as f:
             html = f.read()
