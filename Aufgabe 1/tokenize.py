@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 import re
 import sys
 
@@ -22,8 +20,12 @@ class HTMLTokenizer:
         text = self.read_file()
         abbreviations = self.abv
 
-        tokenized = [re.sub(r"[\":.;,]", '', word) for word in text.split()]
+        specialchars = ["\"", ":", ",", ";"]
+        for c in specialchars:
+            if c in text:
+                text = text.replace(c, " " + c + " ")
 
+        tokenized = [word for word in text.split()]
         for tok in tokenized:
             if tok in abbreviations:
                 tok = tok.replace(tok, abbreviations)
