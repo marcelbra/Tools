@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-
 import re
 import sys
 
@@ -7,7 +5,7 @@ import sys
 class HTMLTokenizer:
 
     def __init__(self, abbreviations, in_file):
-        with open(abbreviations, 'r', encoding='utf-8') as ab:
+        with open(abbreviations+".txt", 'r', encoding='utf-8') as ab:
             self.abv = ab.read()
         #self.abv = abbreviations
         self.infile = in_file
@@ -22,11 +20,15 @@ class HTMLTokenizer:
         text = self.read_file()
         abbreviations = self.abv
 
-        tokenized = [re.sub(r"[\":.;,]", '', word) for word in text.split()]
+        specialchars = ["\"", ":", ",", ";"]
+        for c in specialchars:
+            if c in text:
+                text = text.replace(c, " " + c + " ")
 
+        tokenized = [word for word in text.split()]
         for tok in tokenized:
             if tok in abbreviations:
-                tok = tok.replace(tok, abbreviations)
+                tok.replace(tok, abbreviations)
 
         return tokenized
 
@@ -34,7 +36,9 @@ class HTMLTokenizer:
 
     def save_text(self, file_name, tokenized):
         with open(file_name, "w") as f:
-            f.write("\n".join(tokenized))
+            for sentence in (' '.join(tokenized)).split('.'):
+                f.write(str(sentence.split()))
+                f.write('\n')
 
 
 
