@@ -13,7 +13,7 @@ class HTMLToText(HTMLParser):
         self.docs = []
 
     def dataloader(self,
-                   path="/Users/marcelbraasch/Desktop/Tools"
+                   path="./data/www.tagesschau.de/ausland/europa/italien-stichwahl-rom-103.html"
                    ):
 
         for root, dirs, files in os.walk(path):
@@ -26,7 +26,7 @@ class HTMLToText(HTMLParser):
                         return html
 
     def get_doc_by_path(self,
-                        path="/Users/marcelbraasch/Desktop/Tools/www.tagesschau.de/wirtschaft/verbraucher/tanktourismus-eu-benzinpreise-101.html"
+                        path="./data/www.tagesschau.de/inland/buchpreis-strubel-101.html"
                         ):
         with open(path) as f:
             html = f.read()
@@ -34,15 +34,27 @@ class HTMLToText(HTMLParser):
 
     def get_paragraph(self):
         html = self.get_doc_by_path()
-        pattern = r"(.*)</p>"
+        pattern = r"<p.*>(\n*.*?)<\/p>"
         paragraphs = re.findall(pattern, html)
-        filtered = []
         for paragraph in paragraphs:
+            print(paragraph)
 
+    def get_headline(self):
+        html = self.get_doc_by_path()
+        title_pattern = r"\"headline\"\s:\s(.*),"
+        title = re.findall(title_pattern, html)
+        print(" ".join(title))
 
-        s = 0
+    def get_descritption(self):
+        html = self.get_doc_by_path()
+        description_pattern = r"\"description\"\s:\s(.*),"
+        description = re.findall(description_pattern, html)
+        print(" ".join(description))
+
 
 
 
 html_to_text = HTMLToText()
+html_to_text.get_headline()
+html_to_text.get_descritption()
 html_to_text.get_paragraph()
