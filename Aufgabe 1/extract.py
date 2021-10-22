@@ -33,7 +33,9 @@ class HTMLToText:
 
     def iterate(self):
         """
-
+        Iterates through each html file stored in self.docs to extract redundant text (by calling respective functions).
+        Calls format_doc() function to format the text to be output.
+        Calls write_doc() function to write the result into a text file.
         :return:
         """
         assert len(self.docs) > 0, "You need to call load_data first!"
@@ -55,13 +57,45 @@ class HTMLToText:
                            indices)
         self.write_doc()
 
+    def clean_text(self):
+        """"
+        Discards special characters that were created in preprocessing.
+        Deletes URLs embedded in text.
+        Deletes any spare/ left over tags.
+        """
+        for char in self.result:
+            if char == "\\":
+                self.result = self.result.replace(char, '')
+
+        url_begin_pattern = r"<\w.*>\S" # Position is +1 of desired index
+        url_end_pattern = r"</\w>"
+        url_begin = re.finditer(url_begin_pattern, self.result)
+        url_end = re.findall(url_end_pattern, self.result)
+
+        if url_begin is not None:
+            for idx_begin in url_begin:
+                self.result = self.result[:idx_begin.start()-1] + " " + self.result[idx_begin.end()-1:]
+
+        for string in self.result.split():
+            if string.startswith("<ahref"):
+                self.result = self.result.replace(string, '')
+
+        for tag in url_end:
+            if tag in self.result:
+                self.result = self.result.replace(tag, '')
+
+        print(self.result)
+
     def write_doc(self):
-        with open(sys.argv[3], "w") as f:
+        self.clean_text()
+        with open("text.txt", "w") as f:
             f.write(self.result)
+
 
     def format_doc(self, heading, description, paragraphs, h2s, indices):
         """
-
+        Determines the format of the output text.
+        Formatted variables (each one containing text) are saved into self.result.
         :param heading:
         :param description:
         :param paragraphs:
@@ -69,13 +103,13 @@ class HTMLToText:
         :param indices:
         :return:
         """
-        self.result += f"{heading[1:-1]}\n\n{description[1:-1]}\n\n"  # Remove " .. " in beginning and end
+        self.result += f"{heading[1:-1]}\n\n{description[1:-1]}\n"  # Remove " .. " in beginning and end
         for i, paragraph in enumerate(paragraphs):
             # Check if there is an h2 heading before the current paragraph
             if i in indices:
-                self.result += f"{h2s[indices.index(i)]}\n\n"
-            self.result += f"{paragraph}\n\n"
-        self.result += "\n" * 5
+                self.result += f"{h2s[indices.index(i)]}\n"
+            self.result += f"{paragraph}\n"
+        self.result += "\n" * 2
 
     def get_paragraphs(self):
         """
@@ -101,6 +135,7 @@ class HTMLToText:
         indices = [paragraphs.index(p) if p in paragraphs else None for p in h2_paragraphs]
         return indices
 
+
     def get_contents(self):
         """
         Retrieves the contents of the current doc.
@@ -114,6 +149,7 @@ class HTMLToText:
                     r"\"description\"\s:\s(.*),",  # description
                     r"<h2.*?>(.*)</h2>"]  # h2s
         contents = [self.get_content_with(pattern) for pattern in patterns]
+
         # Extract from regex-list: title and desc. are unique, h2s are List[str], thus we grab these from the lists
         contents = [contents[i][0] if i < 2 else contents[i]
                     for i, _ in enumerate(contents)]
