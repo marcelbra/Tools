@@ -64,8 +64,7 @@ class HTMLToText:
         Deletes any spare/ left over tags.
         """
         for char in self.result:
-            if char == "\\":
-                self.result = self.result.replace(char, '')
+            self.result = self.result.replace("\\", '')
 
         url_begin_pattern = r"<\w.*>\S" # Position is +1 of desired index
         url_end_pattern = r"</\w>"
