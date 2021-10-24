@@ -65,24 +65,20 @@ class HTMLToText:
         """
         self.result = self.result.replace("\\", '')
 
-        url_begin_pattern = r"<\w.*>\S" # Position is +1 of desired index
-        url_end_pattern = r"</\w>"
+        url_begin_pattern = r"<\w.*>\S"  # Position is +1 of desired index
+        closing_tag_pattern = r"</\w.*>"
         url_begin = re.finditer(url_begin_pattern, self.result)
-        url_end = re.findall(url_end_pattern, self.result)
+        closing_tag = re.finditer(closing_tag_pattern, self.result)
 
         if url_begin is not None:
             for idx_begin in url_begin:
-                self.result = self.result[:idx_begin.start()-1] + " " + self.result[idx_begin.end()-1:]
+                self.result = self.result.replace(idx_begin.group()[:-1], "")
 
-        for string in self.result.split():
-            if string.startswith("<ahref"):
-                self.result = self.result.replace(string, '')
+        if closing_tag is not None:
+            for tag in closing_tag:
+                self.result = self.result.replace(tag.group(), "")
 
-        for tag in url_end:
-            if tag in self.result:
-                self.result = self.result.replace(tag, '')
-
-        print(self.result)
+        return self.result
 
     def write_doc(self):
         self.clean_text()
