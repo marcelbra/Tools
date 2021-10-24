@@ -63,8 +63,7 @@ class HTMLToText:
         Deletes URLs embedded in text.
         Deletes any spare/ left over tags.
         """
-        for char in self.result:
-            self.result = self.result.replace("\\", '')
+        self.result = self.result.replace("\\", '')
 
         url_begin_pattern = r"<\w.*>\S" # Position is +1 of desired index
         url_end_pattern = r"</\w>"
