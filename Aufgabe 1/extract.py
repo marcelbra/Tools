@@ -1,6 +1,11 @@
 """
 P7 Tools - Aufgabe 1
 HTML Extractor
+
+Gruppe:
+Marcel Braasch
+Nadja Seeberg
+Sinem Kühlewind (geb. Demiraslan)
 """
 
 import re
