@@ -20,7 +20,6 @@ class RawTextTokenizer:
         assert len(sys.argv) > 0, "You need to specify as 'abrev infile.txt > outfile.txt"
         self.abrev_path = sys.argv[1] + ".txt"
         self.in_file_path = sys.argv[2]
-        self.out_file_path = sys.argv[4]
         self.abrev, self.text, self.sentences = "", "", ""
         self.tokenized = []
 
@@ -77,21 +76,20 @@ class RawTextTokenizer:
         """
         return sentence.replace("QU4K", ".")
 
-    def save_text(self):
+    def print_text(self):
         """
         Saves the text to the specified output file.
         """
         s = ""
         for sentence in self.tokenized:
             s += f"{sentence}\n"
-        with open(self.out_file_path, "w") as f:
-            f.write(s)
+            print(sentence)
 
 def main():
-    tokenizer = HTMLTokenizer()
+    tokenizer = RawTextTokenizer()
     tokenizer.load_data()
     tokenizer.split_sentences()
     tokenizer.tokenize()
-    tokenizer.save_text()
+    tokenizer.print_text()
 
 main()
