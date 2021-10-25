@@ -40,12 +40,13 @@ class RawTextTokenizer:
         This results in correct split since dots which are not grammatical ones anymore
         are not considered for splitting.
         """
+        self.text = "Hallo, das ist www.tagesschau.de!"
         text = " ".join([word.replace(".", "QU4K") if word in self.abrev else word  # 1)
                          for i, word in enumerate(self.text.split())])
         number_pattern = r"(?<!\S)\d{1,3}(?:\.\d{3})*(?!\S)"
         text = re.sub(number_pattern, lambda m: m.group().replace('.', 'QU4K'), text)  # 2)
         address_pattern = r"(www).([A-Za-z0-9]*)\.(de|com|org)"
-        re.sub(address_pattern, r"\1QU4K\2QU4K\3", text)  # 3)
+        text = re.sub(address_pattern, r"\1QU4K\2QU4K\3", text)  # 3)
         split_pattern = r"((?<=\.\")|(?<=[.!?]))\s+"
         self.sentences = re.split(split_pattern, text)  # 4)
 
