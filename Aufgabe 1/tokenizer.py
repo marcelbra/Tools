@@ -40,7 +40,7 @@ class RawTextTokenizer:
         This results in correct split since dots which are not grammatical ones anymore
         are not considered for splitting.
         """
-        self.text = "Hallo, das ist www.tagesschau.de!"
+        #self.text = "Hallo, das ist www.tagesschau.de!"
         text = " ".join([word.replace(".", "QU4K") if word in self.abrev else word  # 1)
                          for i, word in enumerate(self.text.split())])
         number_pattern = r"(?<!\S)\d{1,3}(?:\.\d{3})*(?!\S)"
