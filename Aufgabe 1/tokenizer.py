@@ -7,7 +7,7 @@ import string
 class RawTextTokenizer:
 
     def __init__(self):
-        """ #
+        """
         Expects a corpus of running text.
         Splits senteces greedily by looking for punctuation like . ! ? and ." .
         Makes sure abbreviations, thousands-denoted numbers and internet addresses are not split.
