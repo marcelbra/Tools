@@ -2,7 +2,7 @@
 
 import re
 import sys
-
+import string
 
 class HTMLTokenizer:
 
@@ -12,10 +12,11 @@ class HTMLTokenizer:
         self.in_file_path = sys.argv[2]
         self.out_file_path = sys.argv[4]
         self.abrev, self.text, self.sentences = "", "", ""
-
+        self.tokenized = []
 
     def load_data(self):
-        """Loads abbreviations and input file."""
+        """Loads abbrev
+        iations and input file."""
         with open(self.abrev_path, "r", encoding='utf-8') as f:
             self.abrev = set(f.read().split("\n"))
         with open(self.in_file_path, "r", encoding='utf-8') as f:
@@ -28,8 +29,8 @@ class HTMLTokenizer:
         5) replace QU4K back to dot. This results in correct split since dots which are not grammatical
         ones anymore are not considered for splitting.
         """
-        text = "Es ist z.B. schön, dass ca. 1.000.000 andere der Kidner zw. Nepal und China beim Dr. Arzt lachen. Zudem kann man sagen es ist warm. Nicht wirklich kalt."
-
+        text = "Es ist z.B. schön, dass ca. 1.000.000 andere Kinder (in Nepal und China) beim Dr. Arzt Abk. und Abl. nicht unterscheiden können."
+        text += " Außerdem regnet es in München."
         text = " ".join([word.replace(".", "QU4K") if word in self.abrev else word  # 1)
                          for i, word in enumerate(text.split())])
         number_pattern = r"(?<!\S)\d{1,3}(?:\.\d{3})*(?!\S)"
@@ -37,18 +38,32 @@ class HTMLTokenizer:
         address_pattern = r"(www).([A-Za-z0-9]*)\.(de|com|org)"
         re.sub(address_pattern, r"\1QU4K\2QU4K\3", text)  # 3)
         split_pattern = r"(?<=[a-zäöü][.!?])\s+"
-        sentences = re.split(split_pattern, text)  # 4)
-        sentences = [sentence.replace("QU4K", ".") for sentence in sentences]  # 5)
-        self.sentences = sentences
+        self.sentences = re.split(split_pattern, text)  # 4)
 
     def tokenize(self):
         """Tokenizes sentences into singlue words."""
-        self.tokenized = [sent.split(" ") for sent in self.sentences]
+        #split_by = r"[!%&'\(\)$#\"\/\\*+,-.:;<=>?@\[\]^_´`{|}~]"
+        space = set("[!%&'()$#\"/\*+,-.:;<=>?@[]^_´`{|}~]")
+        for sent in self.sentences:
+            sent = list(sent)
+            for i, char in enumerate(sent):
+                # Make sure to respect length of string when indexing
+                if i != 0:
+                    if sent[i] in space and sent[i - 1] != " ":
+                        sent.insert(i, " ")
+                if i != len(sent)-1:
+                    if sent[i] in space and sent[i + 1] != " ":
+                        sent.insert(i + 1, " ")
+            sent = self.reset_dots("".join(sent))
+            self.tokenized.append(sent)
+
+    def reset_dots(self, sentence):
+        return sentence.replace("QU4K", ".")
 
     def save_text(self):
         """Saves the text to the specified output file."""
         s = ""
-        for sentence in self.sentences:
+        for sentence in self.tokenized:
             s += f"{sentence}\n"
         with open(self.out_file_path, "w") as f:
             f.write(s)
@@ -57,7 +72,7 @@ class HTMLTokenizer:
 tokenizer = HTMLTokenizer()
 tokenizer.load_data()
 tokenizer.split_sentences()
-#tokenizer.tokenize()
+tokenizer.tokenize()
 tokenizer.save_text()
 
 
