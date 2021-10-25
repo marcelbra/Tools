@@ -1,4 +1,4 @@
--hdg.
+x-hdg.
 -tlg.
 12Tel.
 12st.
