@@ -7,15 +7,18 @@ import re
 import os
 import sys
 
-# TODO: Docstrings ausfüllen
-
-
 class HTMLToText:
-    """
-
-    """
 
     def __init__(self):
+        """
+        Expects a corpus of Tagesschau html documents.
+        Iterates through each document and extracts
+        H1 heading, h2 headings, the description and paragraphs.
+        Makes sure the order is preserved (especially h2s and paragraphs).
+
+        How to run:
+        $ python3 extract.py path_to_dir > text.txt
+        """
         self.docs = []
         self.doc = None
         self.result = ""
@@ -24,7 +27,7 @@ class HTMLToText:
         """
         Runs trough the directory specified by arg[1].
         Saves the respective html files.
-        In PyCharm: Run -> Edit Configuations -> Parameters -> path_to_dir > text.txtt
+        In PyCharm: Run -> Edit Configuations -> Parameters ->
         """
         for root, dirs, files in os.walk(sys.argv[1]):
             for file in files:
@@ -33,10 +36,11 @@ class HTMLToText:
 
     def iterate(self):
         """
-        Iterates through each html file stored in self.docs to extract redundant text (by calling respective functions).
-        Calls format_doc() function to format the text to be output.
-        Calls write_doc() function to write the result into a text file.
-        :return:
+        Iterates through each html file stored.
+        Extracts text by calling respective method for each of the entities.
+        Passes the information on to format the contents.
+        Does some cleaning post-processing.
+        When done, moves on to write to text file.
         """
         assert len(self.docs) > 0, "You need to call load_data first!"
         for doc in self.docs:
@@ -55,6 +59,7 @@ class HTMLToText:
                            paragraphs,
                            h2s,
                            indices)
+        self.clean_text()
         self.write_doc()
 
     def clean_text(self):
@@ -64,24 +69,22 @@ class HTMLToText:
         Deletes any spare/ left over tags.
         """
         self.result = self.result.replace("\\", '')
-
         url_begin_pattern = r"<\w.*>\S"  # Position is +1 of desired index
         closing_tag_pattern = r"</\w.*>"
         url_begin = re.finditer(url_begin_pattern, self.result)
         closing_tag = re.finditer(closing_tag_pattern, self.result)
-
         if url_begin is not None:
             for idx_begin in url_begin:
                 self.result = self.result.replace(idx_begin.group()[:-1], "")
-
         if closing_tag is not None:
             for tag in closing_tag:
                 self.result = self.result.replace(tag.group(), "")
-
         return self.result
 
     def write_doc(self):
-        self.clean_text()
+        """
+        Writes the document to text file.
+        """
         with open("text.txt", "w") as f:
             f.write(self.result)
 
@@ -89,13 +92,10 @@ class HTMLToText:
     def format_doc(self, heading, description, paragraphs, h2s, indices):
         """
         Determines the format of the output text.
-        Formatted variables (each one containing text) are saved into self.result.
-        :param heading:
-        :param description:
-        :param paragraphs:
-        :param h2s:
-        :param indices:
-        :return:
+        Formatted variables (each one containing text) are saved.
+        When scraping, in indices we saved which paragraph (by index) had an h2
+        heading in front of it. This way, when creating the running text, we
+        know exactly when to insert the next h2 heading.
         """
         self.result += f"{heading[1:-1]}\n\n{description[1:-1]}\n"  # Remove " .. " in beginning and end
         for i, paragraph in enumerate(paragraphs):
@@ -108,8 +108,6 @@ class HTMLToText:
     def get_paragraphs(self):
         """
         Retrieves the paragraphs of the current docs.
-        Futher,
-        :return:
         """
         # Find all paragraphs and post process
         pattern = r"<p class=\"m.*>(\n*.*?)<\/p>"
@@ -119,9 +117,7 @@ class HTMLToText:
 
     def get_indices_of(self, paragraphs):
         """
-
-        :param paragraphs:
-        :return:
+        Determin if a paragraph has an h2 heading in front of it.
         """
         # Determines which of the paragraphs have an h2 heading above them
         position_pattern = r"<h2(?:.|\n)*?>.*(?:.|\n)*?<.*>\n(.*)</p>"
