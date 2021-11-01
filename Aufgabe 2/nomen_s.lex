@@ -1,0 +1,4 @@
+Oma
+Kamera
+Maracuja
+Hydra
