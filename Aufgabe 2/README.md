@@ -16,4 +16,4 @@ Wir habe insgesamt drei Flexionsklassen implementiert:
     1. Transducer ist in plural_s.fst
     2. Beispiellexikon ist in plural_s.lex
     
-
+In vereiningung.fst werden die drei Transducer schließlich vereinigt.
