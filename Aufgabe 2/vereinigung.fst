@@ -15,13 +15,14 @@ $nomen_en_pl$ = <N>:<> ({<Nom><Sg><F>}:{} | {<Gen><Sg><F>}:{} | {<Nom><Pl><F>}:{
 ALPHABET = [A-ZÄÖÜa-zäöü]
 $Replace_een$ = ({een}:{en}) ^-> ()
 
-$verben_flex$ = <V>:<> ({<pres><1><sg>}:{e} | {<pres><2><sg>}:{st} | {<pres><3><sg>}:{t} |\
-{<pres><1><pl>}:{en} | {<pres><2><pl>}:{t} | {<pres><3><pl>}:{en})
+$verben_flex$ = <V>:<> ({<Pres><1><Sg>}:{e} | {<Pres><2><Sg>}:{st} | {<Pres><3><Sg>}:{t} |\
+{<Pres><1><Pl>}:{en} | {<Pres><2><Pl>}:{t} | {<Pres><3><Pl>}:{en})
 
 % Ruft jeweils die Lexikondatei mit dem dazugehörigen Transducer auf
+"regulaere_verben.lex" $verben_flex$ |\
 "nomen_s.lex" $nomen_s_pl$ |\
-"nomen_en.lex" $nomen_en_pl$ || $Replace_een$ |\
-"regulaere_verben.lex" $verben_flex$
+"nomen_en.lex" $nomen_en_pl$ || $Replace_een$
+
 
 
 
