@@ -1,7 +1,7 @@
 # Experimente, Evaluierungen und Tools 
 ## Abgabe No. 2
 
-Gruppe: Sinem Kühlewind (Demiraslan), Nadja Seeberger, Marcel Braasch
+Gruppe: Sinem Kühlewind (Demiraslan), Nadja Seeberg, Marcel Braasch
 
 Als Zielsprache haben wir Deutsch gewählt.
 
