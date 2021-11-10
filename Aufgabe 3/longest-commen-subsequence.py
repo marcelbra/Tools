@@ -13,12 +13,12 @@ import sys
 def lcs_table(s1, s2):
     """
     Expects two strings s1 and s2.
-    Initializes a len(s1)+1 x len(s2)+1 to save how many common characters
-    in the previous substring exist. Table is initalized with extra 0s in
-    the beginning which denote the empty string. For each entry check whether
-    characters coincide, look for the max value in the enviroment in terms of
-    characters coinciding. If characters are not equal just propagate the
-    previous max value without increasing.
+    Initializes a len(s1)+1 x len(s2)+1 table to save how many common
+    characters in the previous substring exist. Table is initalized with
+    extra 0s in the beginning which denote the empty string. For each entry
+    check whether characters coincide, look for the max value in the
+    enviroment in terms of characters coinciding. If characters are not
+    equal just propagate the previous max value without increasing.
     """
     length_1, length_2 = len(s1) + 1, len(s2) + 1
     table = [[0] * length_1 for _ in range(length_2)]
