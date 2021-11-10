@@ -49,9 +49,7 @@ def backtrack(table):
         else:
             i -= 1
         if not i or not j:
-            sequence = sequence[::-1]
-            break
-    return sequence
+            return sequence[::-1]
 
 def main():
     s1, s2 = sys.argv[1], sys.argv[2]
