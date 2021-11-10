@@ -30,18 +30,18 @@ def lcs_table(s1, s2):
                 table[j][i] = max(table[j - 1][i], table[j][i - 1], table[j - 1][i - 1])
     return table
 
-def backtrack(table):
+def backtrack(s1, s2, table):
     """
     Backtrack through a filled LCS table. Starts in the bottom right corner
     and checks whether we can make a diagonal move. If so, the character is
     part of LCS, if not check if we can go up, if so, do it. If not go left.
     Repeated until the end of the table. Lastly, return the reversed sequence.
     """
-    s1, s2 = sys.argv[1], sys.argv[2]
+    #s1, s2 = sys.argv[1], sys.argv[2]
     i, j = len(s1), len(s2)
     sequence = ""
     while True:
-        if table[j][i - 1] == table[j - 1][i]:
+        if table[j][i - 1] == table[j - 1][i] == table[j - 1][i - 1]:
             sequence += s1[i-1]
             i, j = i - 1, j - 1
         elif table[j-1][i] == table[j][i]:
@@ -54,7 +54,7 @@ def backtrack(table):
 def main():
     s1, s2 = sys.argv[1], sys.argv[2]
     table = lcs_table(s1, s2)
-    lcs = backtrack(table)
+    lcs = backtrack(s1, s2, table)
     print(lcs)
 
 if __name__=="__main__":
