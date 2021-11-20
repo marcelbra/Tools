@@ -1,86 +1,119 @@
-# !/usr/bin/python
+"""
+P7 Experimente, Evaluierung und Tools
+Aufgabe 4 - Spam classification using Naive Bayes
 
+Group:
+Marcel Braasch
+Nadja Seeberg
+Sinem Kühlewind (geb. Demiraslan)
+"""
+
+from collections import defaultdict
 import sys
 import os
+import pickle
 
 
 class NaiveBayes:
-    def __init__(self, file_path, text_categories):
-        """
-        :text_categories: available classes; one class equals one subdirectory
-        :word_class_freq: nested dictionary; {class: {word: freq}, ...}
-        -> p(w|c) = f(w,c)/sum([1 for w in c]))
-        :class_freq: stands for f(c)
-        -> p(c) = f(c)/sum([1 for c in classes])
-        """
-        self.file_path = file_path
-        self.text_categories = text_categories
-        self.f_class = {cat: 0 for cat in text_categories}
 
+    def __init__(self):
 
-    def count_freqs_from_file(self):
-        f_word_class = {cat: {} for cat in self.text_categories}
-        f_word = {}
+        # Set path variables
+        self.file_path = sys.argv[1]
+        self.param_path = sys.argv[2]
+        self.classes = next(os.walk(self.file_path))[1]
+
+        # Variables to save frequencies to
+        self.freq_word_given_class = self.create_class_defaultdict()
+        self.freq_word = defaultdict(int)
+        self.freq_class = defaultdict(int)
+
+        # Variables to save ML estimators to
+        self.prob_word_given_class = self.create_class_defaultdict()
+        self.prob_word = defaultdict(int)
+        self.prob_class = defaultdict(int)
+
+        # Variables needed for backoff smoothing
+        self.rel_freq_word_given_class = self.create_class_defaultdict()
+        self.prob_word_given_class_backoff = self.create_class_defaultdict()
+
+    def create_class_defaultdict(self):
+        """Helper method to create defaultdict of classes."""
+        return {_class: defaultdict(int) for _class in self.classes}
+
+    def count_frequencies(self):
+        """Count word frequencies, word frequencies given the class and class frequencies."""
+
+        # Iterate over each class' files
         for root, dirs, files in os.walk(self.file_path):
-            for cat in self.text_categories:
-                if root.endswith(cat):
+            for _class in self.classes:
+                if root.endswith(_class):
+
+                    # Iterate over each file
                     for file in files:
-                        self.f_class[cat] += 1
-                        email = open(os.path.join(root, file), encoding='latin-1').read()
-                        for word in email.split():
-                            if word in f_word_class[cat]:
-                                f_word_class[cat][word] += 1
-                            else:
-                                f_word_class[cat][word] = 1
-                        #f_word = {word:(1 if word not in f_word else f_word[word]+1) for word in email.split()}
-                            if word in f_word:
-                                f_word[word] += 1
-                            else:
-                                f_word[word] = 1
-        print(f_word)
-        return f_word_class, f_word
+                        with open(os.path.join(root, file), encoding="latin-1") as f:
+                            email = f.read().split()
+
+                            # Count each email's frequencies
+                            self.freq_class[_class] += 1
+                            for word in email:
+                                self.freq_word_given_class[_class][word] += 1
+                                self.freq_word[word] += 1
 
 
-    def calculate_delta(self, f_word_class):
-        N1 = sum(1 for cat in f_word_class for f in f_word_class[cat].values() if f == 1)
-        N2 = sum(1 for cat in f_word_class for f in f_word_class[cat].values() if f == 2)
+    def fit(self):
+        """Estimates probabilities given the frequencies. Then pply backoff smoothing."""
 
-        delta = N1 / (N1 + 2 * N2)
-        return delta
+        self.count_frequencies()
 
+        # Estimate probability of word given class: p(w|c) = f(w,c) / sum_w' f(w',c)
+        for _class in self.classes:
+            frequencies = self.freq_word_given_class[_class]
+            _sum = sum(frequencies.values())
+            self.prob_word_given_class[_class] = {k: v/_sum for k, v in frequencies.items()}
 
-    def calculate_probs(self):
-        """
-        Method to calculate probabilities.
-        Need to calculate:
-        A) p(w)    from    f(w)/sum(f(all_words))
-        B) p(c)    from    f(c)/sum(f(all_classes))
-        C) p(w|c)  from    f(w,c)/sum(f(w', c))
-        D) backoff factor alpha = 1-sum([f_w/f_all_w_in_c for w in c])
-        E) discount delta: iterate over all pairs and their freq
-        -> prob = (f-discount) / total
-        """
-        # A) and C)
-        p_word = {}
-        f_word_class, f_word = self.count_freqs_from_file()
-        p_word_given_class = {cat: {} for cat in self.text_categories}
-        f_allwords = sum([sum(words_freqs.values()) for _, words_freqs in f_word_class.items()])
-        for cls, words_freqs in f_word_class.items(): # {cls: {wort:f}}
-            f_allwords_in_cls = sum(words_freqs.values())
-            for word, f_word_in_cls in words_freqs.items():            # f_word is freq word in class
-                if word in p_word_given_class[cls]:
-                    p_word_given_class[cls][word] += f_word_in_cls / f_allwords_in_cls
-                else:
-                    p_word_given_class[cls][word] = f_word_in_cls / f_allwords_in_cls
-                if word in p_word:
-                    p_word[word] += f_word[word] / f_allwords
-                else:
-                    p_word[word] = f_word[word] / f_allwords
-        # B)
-        p_class = [{cat: self.f_class[cat] / sum(self.f_class.values())} for cat in self.f_class]
+        # Estimate probability of word: p(w) = f(w) / sum(f(w')
+        _sum = sum(self.freq_word.values())
+        self.prob_word = {k: v/_sum for k, v in self.freq_word.items()}
 
+        # Estimate probability of class: p(c) = f(c) / sum(f(c'))
+        _sum = sum(self.freq_class.values())
+        self.prob_class = {k: v/_sum for k, v in self.freq_class.items()}
 
+        # Calulcate discount factor delta after Kneser/Essen/Ney
+        n = lambda x: sum(list(self.freq_word_given_class[_class].values()).count(x) for _class in self.classes)
+        delta = n(1) / (n(1) + 2*n(2))
 
+        # Calulcate relativ frequencies of word given class: r(w|c) = max(0, f(w,c) - delta) / sum_w' f(w',c)
+        for _class in self.classes:
+            _sum = sum(self.freq_word_given_class[_class].values())  # Sum_w' f(w',c)
+            self.rel_freq_word_given_class[_class] = {k: max(0, v - delta) / _sum
+                                                      for k, v in self.freq_word_given_class[_class].items()}
 
-nb = NaiveBayes("./train", ["ham", "spam"])
-nb.calculate_probs()
+        # Dynamically calculate backoff factor alpha
+        alpha = lambda _class: 1 - sum(self.rel_freq_word_given_class[_class].values())
+
+        # Calulcate discount probability: p(w|c) = r(w|c) + alpha(c)p(w)
+        for _class in self.classes:
+            _alpha, rel_word_freq = alpha(_class), self.rel_freq_word_given_class[_class]
+            self.prob_word_given_class_backoff[_class]= {k: rel_word_freq[k] + _alpha * self.prob_word[k]
+                                                          for k, v in self.prob_word_given_class[_class].items()}
+
+    def save_params(self):
+        params = {"prob_word": self.prob_word,
+                  "prob_class": self.prob_class,
+                  "prob_word_given_class": self.prob_word_given_class,
+                  "prob_word_given_class_backoff": self.prob_word_given_class_backoff
+                  }
+        try:
+            with open(f"{self.param_path}.pickle", 'wb') as handle:
+                pickle.dump(params, handle, protocol=pickle.HIGHEST_PROTOCOL)
+            print("Succesfully saved parameters.")
+        except:
+            print("Something went wrong while saving parameters.")
+
+if __name__ == "__main__":
+    assert len(sys.argv) == 3, "Call script as $ python3 train.py train-dir paramfile"
+    nb = NaiveBayes()
+    nb.fit()
+    nb.save_params()

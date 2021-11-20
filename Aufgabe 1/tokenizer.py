@@ -47,7 +47,7 @@ class RawTextTokenizer:
         This results in correct split since dots which are not grammatical ones anymore
         are not considered for splitting.
         """
-        self.text = "Wow, eine 9,00% Chance."
+        #self.text = "Wow, eine 9,00% Chance."
         text = " ".join([word.replace(".", "QU4K") if word in self.abrev else word  # 1)
                          for i, word in enumerate(self.text.split())])
         number_pattern_dot = r"(?<!\S)\d{1,3}(?:\.\d{3})*(?!\S)"
