@@ -63,6 +63,8 @@ class NaiveBayes:
                 prediction = max(log_score.items(), key=operator.itemgetter(1))[0]
                 self.save_score(target, prediction)
 
+                print(file + "\t" + prediction + "\n")
+
         # Show result
         self.show_score(which="accuracy")
 
