@@ -38,6 +38,9 @@ class NaiveBayes:
         self.prob_word_given_class_backoff = self.create_class_defaultdict()
 
     def predict(self):
+        """
+        Doc string
+        """
         for file, target in self.get_files():
             with open(f"{os.getcwd()}/test/{target}/{file}", encoding="latin-1") as f:
                 email = f.read().split()
@@ -56,17 +59,23 @@ class NaiveBayes:
                         log_prob_doc += math.log(prob_given_class[word])
                     log_score[_class] = log_prob_class + log_prob_doc
 
-                # Log the prediction
+                # Save the prediction
                 prediction = max(log_score.items(), key=operator.itemgetter(1))[0]
-                self.log(target, prediction)
-        self.show_score()
+                self.save_score(target, prediction)
 
-    def log(self, target, prediction):
+        # Show result
+        self.show_score(which="accuracy")
+
+    def save_score(self, target, prediction):
         """Increase counter[0] when classified correctly else increase counter[1] by 1."""
         self.counter[target==prediction] += 1
 
-    def show_score(self):
-        print(self.counter)
+    def show_score(self, which):
+        """
+        Doc string
+        """
+        if which == "accuracy":
+            print(self.counter)
 
     def fit(self):
         """Estimates probabilities given the frequencies. Then apply backoff smoothing."""
