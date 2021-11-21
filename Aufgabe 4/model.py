@@ -77,7 +77,9 @@ class NaiveBayes:
         Doc string
         """
         if which == "accuracy":
-            print(self.counter)
+            accuracy = self.counter[0]/(self.counter[0] + self.counter[1])
+            print("Accuracy: " + str(accuracy))
+            # print(self.counter)
 
     def fit(self):
         """Estimates probabilities given the frequencies. Then apply backoff smoothing."""
