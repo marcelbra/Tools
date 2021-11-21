@@ -96,7 +96,8 @@ class NaiveBayes:
     def count_frequencies(self):
         """Count word frequencies, word frequencies given the class and class frequencies."""
         for file, _class in self.get_files():
-            with open(os.path.join(os.getcwd(), file), encoding="latin-1") as f:
+            file = os.path.join(os.getcwd(),"train", _class, file)
+            with open(file, encoding="latin-1") as f:
                 email = f.read().split()
                 # Count emails frequencies
                 self.freq_class[_class] += 1
@@ -104,7 +105,7 @@ class NaiveBayes:
                     self.freq_word_given_class[_class][word] += 1
                     self.freq_word[word] += 1
 
-    def estimate_parameters():
+    def estimate_parameters(self):
         """Estimates the model parameters given the words frequencies."""
 
         for _class in self.classes:
