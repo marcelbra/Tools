@@ -7,7 +7,7 @@ from features import (
     length_of
     )
 import math
-from vector_operations import add, sub, mul, div, dot
+from vector_operations import add, sub, mul, div, dot, create_vec
 
 
 class LogLinear:
@@ -20,13 +20,15 @@ class LogLinear:
         self.data_dir = sys.argv[2]
         if mode == "train":
             self.data_dir, self.paramfile = self.paramfile, self.data_dir
-        self.classes = next(os.walk(self.data_dir))[1]
+        self.classes = ["ham", "spam"] #TODO: next(os.walk(self.data_dir))[1] # irgendwas spinnt hier bei mir
 
         # Parameters and feature functions
         self.features_functions = [avg_word_length_of,
                                    amount_exclamation_mark_of,
                                    length_of]
-        self.theta = [1] * len(self.features_functions)
+        self.n = len(self.features_functions)
+        self.theta = [1] * self.n
+        self.eta = 1e-3
 
         # Load data once
         self.data = self.get_data()
@@ -41,43 +43,46 @@ class LogLinear:
 
         elif self.mode == "train":
 
-            grad = [0] * len(self.theta)
-            for sample, true_class in self.data:
-                #true_score = self.feature_vec(true_class, sample)  # Left term in slides
+            epochs = range(20)
+            for epoch in epochs:
+                grad = create_vec(0, self.n)
+                for sample, true_class in self.data:
 
-                weighted_score = lambda sample, _class: math.exp(dot(self.feature_vec(sample, _class), self.theta))
-                true_score = self.feature_vec(sample, true_class)
-                Z = [weighted_score(sample, _class) for _class in self.classes]
+                    # Feature vector, left term in slides
+                    feature_score = self.feature_vec(sample, true_class)
 
-                unnormalized_prob = weighted_score(sample, true_class)
-                prob_class_given_doc = div(unnormalized_prob/Z)  # Right term in slides
-                grad = add(grad, sub(true_score, prob_class_given_doc))
-                s = 0
+                    # Expectation times feature vector, right term in slides
+                    prob_class_given_doc = 0
+                    for _class in self.classes:
+                        # This is vector of sum_c' p_theta (c',d) * f(c',d)
+                        Z = sum([math.exp(dot(self.theta, self.feature_vec(c, sample)))
+                                 for c in self.classes])
+                        class_prob = math.exp(dot(self.theta, self.feature_vec(_class, sample)))
+                        prob_class_given_doc += class_prob / Z
+
+                    # Create vector of expectations times (element wise) feature vector
+                    expectation = create_vec(prob_class_given_doc, self.n)
+                    expectation_times_feature = mul(expectation, self.feature_vec(_class,sample))
+
+                    # Combine left and right term
+                    score = sub(feature_score, expectation_times_feature)
+
+                    # Update gradient
+                    grad = add(grad, score)
+
+                # Update parameters
+                self.theta = add(self.theta, mul(create_vec(self.eta, n), grad))
+
+                # TODO: Evaluation / logging after every gradient update
+                # TODO: feature functions
+                # TODO: weight decay / hyperparameter tuning
+                # TODO: test SGD / batched gradient update
 
     def feature_vec(self, _class, sample):
         return [ff(sample[i], _class) for i, ff in enumerate(self.features_functions)]
 
-    """
-    def extract_features(self, files):
-        data = {_class: [] for _class in self.classes}
-        for file, _class in files:
-            with open(f"train/{_class}/{file}", encoding="latin-1") as f:
-                email = f.read()
-                score = self.score(email, _class)
-        return data
-    
-    def score(self, email, _class):
-        sample = [amount_exclamation_mark_of(email, _class),
-                  length_of(email, _class),
-                  avg_word_length_of(email, _class)]
-        return sum([feature_i * self.theta[i] for i, feature_i in enumerate(sample)])
-    """
-
     def get_data(self):
-        """
-        Generator object that returns the next file and its
-        corresponding class every time next() is called.
-        """
+        """Opens and saves files according to given file path."""
         data = []
         for root, dirs, files in os.walk(self.data_dir):
             for _class in self.classes:
