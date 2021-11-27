@@ -36,9 +36,12 @@ class LogLinear:
         self.classes = ["ham", "spam"] #TODO: next(os.walk(self.data_dir))[1] # irgendwas spinnt hier bei mir
 
         # Parameters and feature functions
-        self.features_functions = [avg_word_length_of,
-                                   amount_exclamation_mark_of,
-                                   length_of]
+        self.features_functions = [avg_word_length_pos,
+                                   avg_word_length_neg,
+                                   length_neg,
+                                   length_pos,
+                                   amount_exclamation_mark_pos,
+                                   amount_exclamation_mark_neg]
         self.n = len(self.features_functions)
         self.theta = [1] * self.n
         self.eta = 1e-3
