@@ -36,13 +36,13 @@ class LogLinear:
         self.classes = ["ham", "spam"] #TODO: next(os.walk(self.data_dir))[1] # irgendwas spinnt hier bei mir
 
         # Parameters and feature functions
-        self.features_functions = [avg_word_length_pos,
-                                   avg_word_length_neg,
-                                   length_neg,
-                                   length_pos,
-                                   amount_exclamation_mark_pos,
-                                   amount_exclamation_mark_neg]
-        self.n = len(self.features_functions)
+        self.feature_functions = [avg_word_length_pos,
+                                  avg_word_length_neg,
+                                  length_neg,
+                                  length_pos,
+                                  amount_exclamation_mark_pos,
+                                  amount_exclamation_mark_neg]
+        self.n = len(self.feature_functions)
         self.theta = [1] * self.n
         self.eta = 1e-3
 
@@ -58,41 +58,54 @@ class LogLinear:
         if self.mode == "test": pass
 
         elif self.mode == "train":
-            epochs = range(20)
+
+            epochs = range(2)
             grad = create_vec(0, self.n)
             for epoch in epochs:
+
                 scores = create_vec(0, self.n)
                 for sample, true_class in self.data:
+
                     # Feature vector, left term in slides
                     feature_score_left = self.feature_vec(sample, true_class)
-                    # Expectation times feature vector, right term in slides
-                    prob_class_given_doc = 0
-                    counter = 0  # Counts at which vector entry we are right now
+                    # Normalization constant for expectation
+                    Z = sum([math.exp(dot(self.theta, self.feature_vec(c, sample))) for c in self.classes])
+
+                    # Expectation times feature vector which will be build up by procedure below
+                    expectation_times_feature_vec = create_vec(0, self.n)
+
                     for _class in self.classes:
-                        # This is the part right of the expectation (see slides)
-                        feature_score_right = self.features_functions[counter](sample, _class)
-                        counter += 1
-                        # This is the normalization
-                        Z = sum([math.exp(dot(self.theta, self.feature_vec(c, sample))) for c in self.classes])
-                        # Unnormalized score
+
+                        # This is the numerator in the expectation, constant across vector entries
                         class_prob = math.exp(dot(self.theta, self.feature_vec(_class, sample)))
-                        # Combine all terms
-                        prob_class_given_doc += (class_prob * feature_score_right) / Z
+
+                        # Build up the vector entries of the "expect * feat vec"-term.
+                        # This is the part right of the expectation. Each entry requires
+                        # its own feature function.
+                        for i in range(self.n):
+
+                            # Feature score right of the expectation
+                            feature_score_right = self.feature_functions[i](sample, _class)
+
+                            # Combine all terms
+                            expectation_times_feature_vec[i] += (class_prob * feature_score_right) / Z
+
                     # Combine left and right term
-                    score = sub(feature_score, expectation_times_feature)
+                    score = sub(feature_score_left, expectation_times_feature_vec)
                     # Accumulate gradient
                     scores = add(scores, score)
+
                 # Update gradient
                 grad = add(grad, scores)
                 # Update parameters
-                self.theta = add(self.theta, mul(create_vec(self.eta, n), grad))
+                self.theta = add(self.theta, mul(create_vec(self.eta, self.n), grad))
 
                 # TODO: Evaluation / logging after every gradient update
                 # TODO: Weight decay
                 # TODO: Test SGD / batched gradient update
 
-    def feature_vec(self, _class, sample):
-        return [ff(sample[i], _class) for i, ff in enumerate(self.features_functions)]
+    def feature_vec(self, sample, _class):
+        return [ff(sample, _class) for ff in self.feature_functions]
 
     def get_data(self):
         """Opens and saves files according to given file path."""
@@ -102,7 +115,7 @@ class LogLinear:
                 if root.endswith(_class):
                     for file in files:
                         with open(f"train/{_class}/{file}", encoding="latin-1") as f:
-                            data.append((f.read(), _class))
+                            data.append((f.read().split(), _class))
         return data
 
     def create_class_defaultdict(self, data_type):
