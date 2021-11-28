@@ -36,7 +36,7 @@ class LogLinear:
             self.data_dir, self.paramfile = self.data_dir, self.paramfile
         elif mode == "test":
             self.paramfile, self.data_dir = self.paramfile, self.data_dir
-        self.classes = ["ham", "spam"]  # TODO: next(os.walk(self.data_dir))[1] # irgendwas spinnt hier bei mir
+        self.classes = next(os.walk(self.data_dir))[1]
 
         # Parameters and feature functions
         self.feature_functions = [avg_word_length_pos,
