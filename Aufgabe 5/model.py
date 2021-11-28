@@ -19,7 +19,7 @@ from features import (
     amount_exclamation_mark_neg,
     length_pos,
     length_neg
-    )
+)
 import math
 from vector_operations import add, sub, mul, div, dot, create_vec
 
@@ -34,9 +34,9 @@ class LogLinear:
         self.data_dir = data_dir
         if mode == "train":
             self.data_dir, self.paramfile = self.data_dir, self.paramfile
-        elif mode =="test":
+        elif mode == "test":
             self.paramfile, self.data_dir = self.paramfile, self.data_dir
-        self.classes = ["ham", "spam"] #TODO: next(os.walk(self.data_dir))[1] # irgendwas spinnt hier bei mir
+        self.classes = ["ham", "spam"]  # TODO: next(os.walk(self.data_dir))[1] # irgendwas spinnt hier bei mir
 
         # Parameters and feature functions
         self.feature_functions = [avg_word_length_pos,
@@ -51,28 +51,41 @@ class LogLinear:
         self.my = 1e-3
         self.delta = 0
 
-
     def predict(self):
-        if self.mode == "train": pass
+        if self.mode == "train":
+            pass
 
         elif self.mode == "test":
+            predictions = []
             data = self.get_data(self.data_dir)
 
+        for sample, _class in data:
+            feature_score = self.feature_vec(sample, _class)
+            prediction = dot(feature_score, self.theta)
+            if prediction >= 0:
+                predictions.append("Ham")
+            else:
+                predictions.append("Spam")
 
-
+        with open("prediction_list.txt", "w") as output_file:
+            output_file.write(" ".join([pred + "\n" for pred in predictions]))
 
     def fit(self):
         """Estimates probabilities given the frequencies. Then apply backoff smoothing."""
 
-        if self.mode == "test": pass
+        if self.mode == "test":
+            pass
 
         elif self.mode == "train":
+            last_update = {}
+            timestamp_cnt = 0
 
             data = self.get_data(self.data_dir)
 
             epochs = range(2)
             grad = create_vec(0, self.n)
             for epoch in epochs:
+                timestamp_cnt += 1
 
                 scores = create_vec(0, self.n)
                 for sample, true_class in data:
@@ -94,7 +107,6 @@ class LogLinear:
                         # This is the part right of the expectation. Each entry requires
                         # its own feature function.
                         for i in range(self.n):
-
                             # Feature score right of the expectation
                             feature_score_right = self.feature_functions[i](sample, _class)
 
@@ -114,12 +126,9 @@ class LogLinear:
                 self.delta = [weight * self.my for weight in self.theta]
                 self.theta = add(self.theta, mul(create_vec(self.eta, self.n), sub(grad, self.delta)))
 
-
                 # TODO: Evaluation / logging after every gradient update
                 # TODO: Weight decay
                 # TODO: Test SGD / batched gradient update
-
-
 
     def feature_vec(self, sample, _class):
         return [ff(sample, _class) for ff in self.feature_functions]
@@ -146,4 +155,3 @@ class LogLinear:
     def load_parameters(self):
         with open(self.paramfile, "rb") as load_file:
             self.theta = pickle.load(load_file)
-
