@@ -31,103 +31,119 @@ class LogLinear:
         self.mode = mode
         self.paramfile = paramfile
         self.data_dir = data_dir
-        if mode == "train":
-            self.data_dir, self.paramfile = self.data_dir, self.paramfile
-        elif mode == "test":
-            self.paramfile, self.data_dir = self.paramfile, self.data_dir
-        _, self.classes, _ = next(os.walk(self.data_dir))
-
+        self.classes = next(os.walk(self.data_dir))[1]
 
         # Parameters and feature functions
-        self.feature_functions = [avg_word_length_pos,
-                                  avg_word_length_neg,
-                                  length_neg,
-                                  length_pos,
+        self.feature_functions = [#avg_word_length_pos,
+                                  #avg_word_length_neg,
+                                  #length_neg,
+                                  #length_pos,
                                   amount_exclamation_mark_pos,
-                                  amount_exclamation_mark_neg]
+                                  amount_exclamation_mark_neg,
+                                  ]
         self.n = len(self.feature_functions)
-        self.theta = [0] * self.n
 
-
-    def predict(self):
-        if self.mode == "train":
-            pass
-
-        elif self.mode == "test":
-            theta = self.load_parameters()
-            predictions = []
-            data = self.get_data(self.data_dir)
-
-            for sample, _class in data:
-                feature_score = self.feature_vec(sample, _class)
-                prediction = dot(feature_score, theta)
-                if prediction >= 0:
-                    predictions.append("Ham")
-                else:
-                    predictions.append("Spam")
-
-            with open("prediction_list.txt", "w") as output_file:
-                output_file.write("".join([pred + "\n" for pred in predictions]))
-
-
+    def predict(self, mode, theta):
+        """
+        Predicts spam or ham given the set to evaluate on and
+        the parameters.
+        """
+        data_dir = "dev" if mode=="dev" else "test"
+        data = self.get_data(data_dir)
+        counter = [0,0]
+        for sample, true_class in data:
+            max_score, max_class = float("-inf"), None
+            for _class in self.classes:
+                prediction_for_class = dot(self.feature_vec(sample, _class), theta)
+                if prediction_for_class > max_score:
+                    max_score = prediction_for_class
+                    max_class = _class
+            counter[true_class==max_class] += 1
+        accuracy = counter[True] / (counter[False] + counter[True])
+        return accuracy
 
     def fit(self):
-        """Estimates probabilities given the frequencies. Then apply backoff smoothing."""
-        eta = my = 1e-3
+        """
+        Fits the LL model using gradient ascent on log likelihood of the data.
+        Performs ordinary gradient ascent to do the weight update and punishes
+        large weights by l2 regularized likelihood.
+        """
 
-        if self.mode == "test": pass
+        data = self.get_data(self.data_dir)
+        eta = 1e-4
+        theta = [0] * self.n
+        grad = create_vec(0, self.n)
+        logged_scores = []
 
-        elif self.mode == "train":
+        print(self.predict(mode="test", theta=theta), "(Starting score)")
 
-            data = self.get_data(self.data_dir)
+        for epoch in range(5):
 
-            grad = create_vec(0, self.n)
-            for epoch in range(20):
+            grad_step = create_vec(0, self.n)
+            for sample, true_class in data:
 
-                scores = create_vec(0, self.n)
-                for sample, true_class in data:
+                # For reference on what we calulcate here see "gradient.jpeg".
 
-                    # Feature vector, left term in slides
-                    feature_score_left = self.feature_vec(sample, true_class)
-                    # Normalization constant for expectation
-                    Z = sum([math.exp(dot(self.theta, self.feature_vec(c, sample))) for c in self.classes])
+                # Feature vector, left term in slides
+                feature_score_left = self.feature_vec(sample, true_class)
+                # Normalization constant for expectation
+                Z = sum([math.exp(dot(theta, self.feature_vec(c, sample))) for c in self.classes])
 
-                    # Expectation times feature vector which will be build up by procedure below
-                    expectation_times_feature_vec = create_vec(0, self.n)
+                # Expectation times feature vector which will be build up by procedure below, right term in slides
+                expectation_times_feature_vec = create_vec(0, self.n)
+                for _class in self.classes:
+                    # This is the numerator in the expectation, constant across vector entries
+                    class_prob = math.exp(dot(theta, self.feature_vec(_class, sample)))
+                    # Build up the vector entries of the "expect * feat vec"-term.
+                    # This is the part right of the expectation. Each entry requires
+                    # its own feature function.
+                    for i in range(self.n):
+                        # Feature score right of the expectation
+                        feature_score_right = self.feature_functions[i](sample, _class)
+                        # Combine all terms
+                        expectation_times_feature_vec[i] += (class_prob * feature_score_right) / Z
 
-                    for _class in self.classes:
+                # Combine left and right term
+                grad_step_i = sub(feature_score_left, expectation_times_feature_vec)
+                # Accumulate gradient
+                grad_step = add(grad_step, grad_step_i)
 
-                        # This is the numerator in the expectation, constant across vector entries
-                        class_prob = math.exp(dot(self.theta, self.feature_vec(_class, sample)))
+            # Update gradient
+            grad = add(grad, grad_step)
 
-                        # Build up the vector entries of the "expect * feat vec"-term.
-                        # This is the part right of the expectation. Each entry requires
-                        # its own feature function.
-                        for i in range(self.n):
+            # Do finetuning on the held out dev set to determine mu
+            mu = self.determine_mu(grad=grad, theta=theta, eta=eta)
 
-                            # Feature score right of the expectation
-                            feature_score_right = self.feature_functions[i](sample, _class)
+            # Calculate weight decay
+            delta = mul(create_vec(mu, self.n), theta)
 
-                            # Combine all terms
-                            expectation_times_feature_vec[i] += (class_prob * feature_score_right) / Z
+            # Update parameters
+            theta = add(theta, mul(create_vec(eta, self.n), sub(grad, delta)))
 
-                    # Combine left and right term
-                    score = sub(feature_score_left, expectation_times_feature_vec)
-                    # Accumulate gradient
-                    scores = add(scores, score)
+            # Evaluate on test set
+            eval_score = self.predict(mode="test", theta=theta)
+            logged_scores.append(eval_score)
+            print(f"Score for epoch {epoch}: {eval_score}")
 
-                # Update gradient
-                grad = add(grad, scores)
-                # Update parameters, calculate weight decay
-                delta = [weight * my for weight in self.theta]
-                self.theta = add(self.theta, mul(create_vec(eta, self.n), sub(grad, delta)))
+        # Return trained parameters when done
+        return theta
 
-
-                # TODO: Evaluation / logging after every gradient update
-                # TODO: Weight decay
-                # TODO: Test SGD / batched gradient update
-
-            self.save_parameters()
+    def determine_mu(self, grad, theta, eta):
+        """
+        Performs exponential hyperparameter search for mu given
+        the current model and its learning rate.
+        """
+        steps = list(map(lambda x: x/2, list(range(0,10))))
+        best_mu, best_acc = None, float("-inf")
+        for step in steps:
+            mu = math.exp(-step)
+            delta = mul(create_vec(mu, self.n), theta)
+            theta = add(theta, mul(create_vec(eta, self.n), sub(grad, delta)))
+            acc = self.predict(mode="dev", theta=theta)
+            if best_acc < acc:
+                best_acc = acc
+                best_mu = mu
+        return best_mu
 
     def feature_vec(self, sample, _class):
         return [ff(sample, _class) for ff in self.feature_functions]
@@ -135,7 +151,7 @@ class LogLinear:
     def get_data(self, dir):
         """Opens and saves files according to given file path."""
         data = []
-        for root, dirs, files in os.walk(self.data_dir):
+        for root, dirs, files in os.walk(dir):
             for _class in self.classes:
                 if root.endswith(_class):
                     for file in files:
@@ -147,9 +163,9 @@ class LogLinear:
         """Helper method to create defaultdict of classes."""
         return {_class: defaultdict(data_type) for _class in self.classes}
 
-    def save_parameters(self):
+    def save_parameters(self, theta):
         with open(self.paramfile, "wb") as save_file:
-            pickle.dump(self.theta, save_file)
+            pickle.dump(theta, save_file)
 
     def load_parameters(self):
         with open(self.paramfile, "rb") as load_file:
