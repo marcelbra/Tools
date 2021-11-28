@@ -46,7 +46,7 @@ class LogLinear:
                                   amount_exclamation_mark_pos,
                                   amount_exclamation_mark_neg]
         self.n = len(self.feature_functions)
-        self.theta = [1] * self.n
+        self.theta = [0] * self.n
 
 
     def predict(self):
