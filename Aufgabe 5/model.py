@@ -34,12 +34,12 @@ class LogLinear:
         self.classes = next(os.walk(self.data_dir))[1]
 
         # Parameters and feature functions
-        self.feature_functions = [#avg_word_length_pos,
-                                  #avg_word_length_neg,
-                                  #length_neg,
-                                  #length_pos,
-                                  amount_exclamation_mark_pos,
-                                  amount_exclamation_mark_neg,
+        self.feature_functions = [avg_word_length_pos,
+                                  avg_word_length_neg,
+                                  length_neg,
+                                  length_pos,
+                                  #amount_exclamation_mark_pos,
+                                  #amount_exclamation_mark_neg,
                                   ]
         self.n = len(self.feature_functions)
 
@@ -67,36 +67,36 @@ class LogLinear:
         Fits the LL model using gradient ascent on log likelihood of the data.
         Performs ordinary gradient ascent to do the weight update and punishes
         large weights by l2 regularized likelihood.
+        For a reference on what we calulcate here see "gradient.jpeg".
         """
 
         data = self.get_data(self.data_dir)
-        eta = 1e-4
+        eta = 1e-5
         theta = [0] * self.n
         grad = create_vec(0, self.n)
-        logged_scores = []
 
         print(self.predict(mode="test", theta=theta), "(Starting score)")
+        epochs = 30
 
-        for epoch in range(5):
+        for epoch in range(epochs):
 
             grad_step = create_vec(0, self.n)
             for sample, true_class in data:
 
-                # For reference on what we calulcate here see "gradient.jpeg".
-
                 # Feature vector, left term in slides
                 feature_score_left = self.feature_vec(sample, true_class)
+
                 # Normalization constant for expectation
-                Z = sum([math.exp(dot(theta, self.feature_vec(c, sample))) for c in self.classes])
+                Z = sum([math.exp(dot(theta, self.feature_vec(sample, c))) for c in self.classes])
 
                 # Expectation times feature vector which will be build up by procedure below, right term in slides
                 expectation_times_feature_vec = create_vec(0, self.n)
+
                 for _class in self.classes:
+
                     # This is the numerator in the expectation, constant across vector entries
-                    class_prob = math.exp(dot(theta, self.feature_vec(_class, sample)))
-                    # Build up the vector entries of the "expect * feat vec"-term.
-                    # This is the part right of the expectation. Each entry requires
-                    # its own feature function.
+                    class_prob = math.exp(dot(theta, self.feature_vec(sample, _class)))
+
                     for i in range(self.n):
                         # Feature score right of the expectation
                         feature_score_right = self.feature_functions[i](sample, _class)
@@ -114,15 +114,14 @@ class LogLinear:
             # Do finetuning on the held out dev set to determine mu
             mu = self.determine_mu(grad=grad, theta=theta, eta=eta)
 
-            # Calculate weight decay
+            # Calculate weight decay parameter
             delta = mul(create_vec(mu, self.n), theta)
 
             # Update parameters
-            theta = add(theta, mul(create_vec(eta, self.n), sub(grad, delta)))
+            theta = add(theta, mul(create_vec(eta, self.n), sub(grad, delta))) # lr[epoch]
 
             # Evaluate on test set
             eval_score = self.predict(mode="test", theta=theta)
-            logged_scores.append(eval_score)
             print(f"Score for epoch {epoch}: {eval_score}")
 
         # Return trained parameters when done
@@ -143,6 +142,7 @@ class LogLinear:
             if best_acc < acc:
                 best_acc = acc
                 best_mu = mu
+        print(best_mu)
         return best_mu
 
     def feature_vec(self, sample, _class):
