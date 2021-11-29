@@ -31,38 +31,68 @@ class LogLinear:
         self.mode = mode
         self.paramfile = paramfile
         self.data_dir = data_dir
-        self.classes = next(os.walk(self.data_dir))[1]
+        _, self.classes, _ = next(os.walk(self.data_dir))
 
         # Parameters and feature functions
         self.feature_functions = [avg_word_length_pos,
                                   avg_word_length_neg,
                                   length_neg,
                                   length_pos,
-                                  #amount_exclamation_mark_pos,
-                                  #amount_exclamation_mark_neg,
-                                  ]
+                                  amount_exclamation_mark_pos,
+                                  amount_exclamation_mark_neg]
         self.n = len(self.feature_functions)
 
-    def predict(self, mode, theta):
+    def predict(self, mode, theta, write_data=None, data_dir=None):
         """
-        Predicts spam or ham given the set to evaluate on and
-        the parameters.
+        Predicts spam or ham given the set to evaluate on and the parameters.
+        If wished user can pass the directory of the data. If not given the mode
+        the methods infers whether to pick the dev (for hyperparameter tuning) or
+        the test set (for evaluation).
         """
-        data_dir = "dev" if mode=="dev" else "test"
+
+        if not data_dir:
+            # Gives the user the opportunity to pass an own dataset
+            # If it is not the default dev or test set
+            data_dir = "dev" if mode=="dev" and not data_dir else "test"
+
         data = self.get_data(data_dir)
         counter = [0,0]
+        predictions = "" if write_data else None
+
         for sample, true_class in data:
+
+            # Saves which class is the best
             max_score, max_class = float("-inf"), None
+
+            # Wir haben Ihren Vorschlag "Die predict-Funktion sollte auch auf Dateien angewendet werden können,
+            # die noch nicht klassifiziert sind" gesehen, aber sind uns unsicher, was wir verändern sollen.
+            # Wenn wir das Model auf Klassen x,y trainieren, dann wird die Inferenz doch auch auf genau diesen
+            # Klassen stattfinden, oder?
             for _class in self.classes:
+
                 prediction_for_class = dot(self.feature_vec(sample, _class), theta)
                 if prediction_for_class > max_score:
                     max_score = prediction_for_class
                     max_class = _class
+
+            # Save predictions for writing in the end
+            if predictions is not None:
+                predictions += f"True class: {true_class}. Predicted class: {max_class}.\n"
+
             counter[true_class==max_class] += 1
+
+        if predictions is not None:
+            with open("prediction.txt", "w", encoding="utf-8") as f:
+                f.write(predictions)
+
         accuracy = counter[True] / (counter[False] + counter[True])
+
         return accuracy
 
-    def fit(self):
+    def fit(self,
+            eta=1e-5,
+            epochs=30,
+            ):
         """
         Fits the LL model using gradient ascent on log likelihood of the data.
         Performs ordinary gradient ascent to do the weight update and punishes
@@ -71,12 +101,10 @@ class LogLinear:
         """
 
         data = self.get_data(self.data_dir)
-        eta = 1e-5
         theta = [0] * self.n
         grad = create_vec(0, self.n)
-
+        best_theta, best_score = theta, float("-inf")
         print(self.predict(mode="test", theta=theta), "(Starting score)")
-        epochs = 30
 
         for epoch in range(epochs):
 
@@ -118,21 +146,29 @@ class LogLinear:
             delta = mul(create_vec(mu, self.n), theta)
 
             # Update parameters
-            theta = add(theta, mul(create_vec(eta, self.n), sub(grad, delta))) # lr[epoch]
+            theta = add(theta, mul(create_vec(eta, self.n), sub(grad, delta)))
 
             # Evaluate on test set
             eval_score = self.predict(mode="test", theta=theta)
             print(f"Score for epoch {epoch}: {eval_score}")
 
+            # Saves the best setting
+            if eval_score > best_score:
+                best_score = eval_score
+                best_theta = theta
+
+        # Save the best test data predictions
+        self.predict(mode="test", theta=best_theta, write_data=True)
+
         # Return trained parameters when done
-        return theta
+        return best_theta
 
     def determine_mu(self, grad, theta, eta):
         """
         Performs exponential hyperparameter search for mu given
         the current model and its learning rate.
         """
-        steps = list(map(lambda x: x/2, list(range(0,10))))
+        steps = list(map(lambda x: x/2, list(range(0,5))))
         best_mu, best_acc = None, float("-inf")
         for step in steps:
             mu = math.exp(-step)
@@ -142,7 +178,6 @@ class LogLinear:
             if best_acc < acc:
                 best_acc = acc
                 best_mu = mu
-        print(best_mu)
         return best_mu
 
     def feature_vec(self, sample, _class):

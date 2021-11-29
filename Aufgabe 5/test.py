@@ -6,4 +6,5 @@ if __name__ == "__main__":
     mode = "test"
     ll = LogLinear(mode=mode, data_dir=sys.argv[2], paramfile=sys.argv[1])
     params = ll.load_parameters()
-    ll.predict(mode="test", theta=params)
+    accuracy = ll.predict(mode="test", theta=params)
+    print(f"Model accuracy is {accuracy*100}%.")
