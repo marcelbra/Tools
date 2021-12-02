@@ -1,7 +1,9 @@
 import os
 import sys
 from features import (word_tag,
-                      word_tag_start,
+                      prevtag_tag,
+                      prevtag_word_tag,
+                      substrings_tag,
                       word_shape_tag)
 
 
@@ -31,5 +33,5 @@ class CRFTagger:
 if __name__ == '__main__':
     crf = CRFTagger(data_file=sys.argv[1], paramfile=sys.argv[2])
     data = crf.get_data()
-    print(word_shape_tag(data))
+    print((word_shape_tag(data[:2])))
 
