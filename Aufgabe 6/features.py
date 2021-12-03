@@ -9,7 +9,7 @@ def word_tag(words, tags):
     return words_tags
 
 
-def prevtags_tags(words, tags):
+def prevtags_tags(tags):
     # extract tag and previous tag for each tag - previous tag for first tag is <s>
     prevtags_tags = []
     for ix, tag in enumerate(tags):
