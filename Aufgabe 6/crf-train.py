@@ -9,8 +9,10 @@ Sinem Kühlewind (geb. Demiraslan)
 
 import os
 import sys
+from collections import Counter
+
 from features import (word_tag,
-                      prevtags_tags,
+                      prevtag_tag,
                       prevtag_word_tag,
                       substrings_tag,
                       word_shape_tag)
@@ -25,9 +27,9 @@ class CRFTagger:
         self.forward_table = [defaultdict(int)]
         self.tagset = None
         self.sentences = []
+        self.theta = defaultdict()
         # We need to store tagset in self as we need to iterate over each tag in tagset
         # in each function. Same goes for self.sentences.
-
 
     def get_data(self):
         """
@@ -38,21 +40,48 @@ class CRFTagger:
         with open(self.data_file, encoding='utf-8') as train_file:
             file = train_file.read().split("\n\n")
             sentences = [["<s>"] + [word_tag.split("\t")[0] for word_tag in sent.split("\n")
-                      if len(word_tag.split("\t")) == 2] + ["<s>"] for sent in file if sent != ""]
+                                    if len(word_tag.split("\t")) == 2] + ["<s>"] for sent in file if sent != ""]
             tags = [["BOUNDARY"] + [word_tag.split("\t")[1] for word_tag in sent.split("\n")
-                    if len(word_tag.split("\t")) == 2] + ["BOUNDARY"] for sent in file if sent != ""]
+                                    if len(word_tag.split("\t")) == 2] + ["BOUNDARY"] for sent in file if sent != ""]
             for s, t in zip(sentences, tags):
                 data.append((s, t))
             self.sentences = sentences
         return data
 
+    def fit(self):
+        attributes = []
+        data = self.get_data()
+        for (words, tags) in data:
+            feature_count = {}
+            for i in range(0, len(tags)): #ich bekomme einen Fehler, wenn ich mit len(tags) +1 iteriere
+                prevtag = tags[i-1]
+                # extract features and save them to list as Strings
+                features = self.extract_features(i, words, tags)
+                for feat in features:
+                    attributes.append(str(feat))
+                #extract feature frequency per sentence key = feature, value = freq (as discussed in class)
+                feature_count = Counter(attributes)
 
-    def get_tagset(self): # 54 tags together with BOUNDARY
+            feat_vec = feature_count.values()
+
+
+
+
+
+    def extract_features(self, i, words, tags):
+        word_to_tag = word_tag(i, words, tags)
+        prevtag_to_tag = prevtag_tag(i, tags)
+        prevtag_to_word_to_tag = prevtag_word_tag(i, words, tags)
+        ngrams_to_tag = substrings_tag(i, words, tags)
+        word_shape_to_tag = word_shape_tag(i, words, tags)
+
+        return word_to_tag, prevtag_to_tag, prevtag_to_word_to_tag, ngrams_to_tag, word_shape_to_tag
+
+    def get_tagset(self):  # 54 tags together with BOUNDARY
         sentences = self.get_data()
         self.tagset = list(set([re.sub("[|]", '', taglist) for sentence, sent_tags in sentences
-                      for taglist in sent_tags]))
+                                for taglist in sent_tags]))
         return self.tagset
-
 
     def forward(self):
         """
@@ -74,7 +103,6 @@ class CRFTagger:
         """
         return
 
-
     def backward(self, position):
         """
         Computes backward probabilities of each t in T at position i.
@@ -84,7 +112,6 @@ class CRFTagger:
         :return: backward probabilities
         """
         pass
-
 
     def aposteriori(self, position):
         """
@@ -97,9 +124,7 @@ class CRFTagger:
         pass
 
 
-
 if __name__ == '__main__':
     crf = CRFTagger("Tiger/train.txt", paramfile="paramfile.pickle")
     crf.forward()
-
-
+    crf.fit()
