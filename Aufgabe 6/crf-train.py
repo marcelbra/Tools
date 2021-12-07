@@ -37,7 +37,7 @@ class CRFTagger:
 
     def fit(self):
 
-        weights = self.init_weights()
+        weights = self.init_scores(_, mode="weight")
         data = self.get_data()
 
         for words, tags in data:
@@ -54,7 +54,7 @@ class CRFTagger:
         """
         Calulates gamma values for the word sequence, given alphas and betas.
         """
-        gammas = self.init_scores(words, gammas=True)
+        gammas = self.init_scores(words, mode="gammas")
         for i in range(1, len(words)):
             for tag, beta_score in betas[i]:
                 for previous_tag, alpha_score in alphas[i-1]:
@@ -65,7 +65,7 @@ class CRFTagger:
         return gammas
 
     def forward(self, words, weights):
-        alphas = self.init_scores(words)
+        alphas = self.init_scores(words, mode="alpha")
         for i in range(1, len(words)):
             for tag in self.tagset:
                 for previous_tag, previous_score in alphas[i-1].items():
@@ -80,7 +80,7 @@ class CRFTagger:
         In slides we said beta(i-1) is dependent on beta(i). That's equivalent to saying
         beta(i) is dependent on beta(i+1) (makes the handling of indices more convenient).
         """
-        betas = self.init_scores(words)
+        betas = self.init_scores(words, mode="beta")
         for i in range(len(words) - 1)[::-1]:
             for tag in self.tagset:
                 for next_tag, next_score in betas[i+1].items():
@@ -92,40 +92,20 @@ class CRFTagger:
     def feature_vector(self, previous_tag, tag, words, i):
         pass #TODO
 
-    def init_scores(self, words, gammas=False):
-        """
-        Creates a list of dictionaries for every given word.
-        For every word, a score for every tag will be saved.
-
-        For alphas and betas structure looks like this:
-        [{'A': 1, 'B': 0, 'C': 0},
-         {'A': 1, 'B': 0, 'C': 0},
-         {'A': 1, 'B': 0, 'C': 0}]
-
-        For gammas structure looks like this:
-        [{'A': {'A': 1, 'B': 0, 'C': 0},
-          'B': {'A': 1, 'B': 0, 'C': 0},
-          'C': {'A': 1, 'B': 0, 'C': 0}},
-         {'A': {'A': 1, 'B': 0, 'C': 0},
-          'B': {'A': 1, 'B': 0, 'C': 0},
-          'C': {'A': 1, 'B': 0, 'C': 0}},
-         {'A': {'A': 1, 'B': 0, 'C': 0},
-          'B': {'A': 1, 'B': 0, 'C': 0},
-          'C': {'A': 1, 'B': 0, 'C': 0}}]
-        """
-        if gammas:
+    def init_scores(self, words, mode):
+        """Initializer for alpha, beta, gamma and weight scores."""
+        if mode=="gamma":
             structure = [{tag: {tag: 1 if tag=="A" else 0
                                 for tag in tags}
                           for tag in tags}
                          for _ in words]
-        else:
+        elif mode=="alpha" or mode=="beta":
             structure = [{tag: 1 if tag=="BOUNDARY" else 0
                           for tag in self.tagset}
                          for _ in words]
+        elif mode=="weight":
+            structure = [1 for _ in range(len(self.feature_functions))]
         return structure
-
-    def init_weights(self):
-        return [1 for _ in range(len(self.feature_functions))]
 
     def extract_features(self, i, words, tags):
         word_to_tag = word_tag(i, words, tags)
