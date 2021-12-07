@@ -1,7 +1,8 @@
+"""
+Extract features.
+"""
+
 import string
-
-"""Extract features"""
-
 
 def word_tag(ix, words, tags):
     # Extract word-tag feature
