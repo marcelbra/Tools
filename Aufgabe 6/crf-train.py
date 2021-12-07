@@ -36,18 +36,39 @@ class CRFTagger:
                                   word_shape_tag]
 
     def fit(self):
+
         weights = self.init_weights()
         data = self.get_data()
+
         for words, tags in data:
+
+            # Expected feature values
             alpha = self.forward(words, weights)
             betas = self.backward(words, weights)
+            gammas = self.get_estimated_feature_values(words, weights, alphas, betas)
+
+            # Observed feature values
+
+
+    def get_estimated_feature_values(self, words, weights, alphas, betas):
+        """
+        Calulates gamma values for the word sequence, given alphas and betas.
+        """
+        gammas = self.init_scores(words, gammas=True)
+        for i in range(1, len(words)):
+            for tag, beta_score in betas[i]:
+                for previous_tag, alpha_score in alphas[i-1]:
+                    feature_vector = self.feature_vector(previous_tag, tag, words, i)
+                    score = mul(feature_vector, weights)
+                    gamma = alphas[i-1][previous_tag] + score + betas[i][tag] - alphas[-1]["<s>"]
+                    gammas[i][tag][previous_tag] += gamma
+        return gammas
 
     def forward(self, words, weights):
         alphas = self.init_scores(words)
         for i in range(1, len(words)):
             for tag in self.tagset:
                 for previous_tag, previous_score in alphas[i-1].items():
-                    continue
                     feature_vector = self.feature_vector(previous_tag, tag, words, i)
                     score = previous_score + mul(feature_vector, weights)
                     alphas[i][tag] = log_sum_exp(alphas[i][tag], score)
@@ -71,16 +92,36 @@ class CRFTagger:
     def feature_vector(self, previous_tag, tag, words, i):
         pass #TODO
 
-    def init_scores(self, words):
+    def init_scores(self, words, gammas=False):
         """
         Creates a list of dictionaries for every given word.
         For every word, a score for every tag will be saved.
-        Structure looks like this:
-        s = [{'NN': 0, 'V': 0, 'NER': 0, '<s>': 1}, { ... }, { ... }, ... ]
+
+        For alphas and betas structure looks like this:
+        [{'A': 1, 'B': 0, 'C': 0},
+         {'A': 1, 'B': 0, 'C': 0},
+         {'A': 1, 'B': 0, 'C': 0}]
+
+        For gammas structure looks like this:
+        [{'A': {'A': 1, 'B': 0, 'C': 0},
+          'B': {'A': 1, 'B': 0, 'C': 0},
+          'C': {'A': 1, 'B': 0, 'C': 0}},
+         {'A': {'A': 1, 'B': 0, 'C': 0},
+          'B': {'A': 1, 'B': 0, 'C': 0},
+          'C': {'A': 1, 'B': 0, 'C': 0}},
+         {'A': {'A': 1, 'B': 0, 'C': 0},
+          'B': {'A': 1, 'B': 0, 'C': 0},
+          'C': {'A': 1, 'B': 0, 'C': 0}}]
         """
-        structure = [{tag: 1 if tag=="BOUNDARY" else 0
-                      for tag in self.tagset}
-                     for word in words]
+        if gammas:
+            structure = [{tag: {tag: 1 if tag=="A" else 0
+                                for tag in tags}
+                          for tag in tags}
+                         for _ in words]
+        else:
+            structure = [{tag: 1 if tag=="BOUNDARY" else 0
+                          for tag in self.tagset}
+                         for _ in words]
         return structure
 
     def init_weights(self):
