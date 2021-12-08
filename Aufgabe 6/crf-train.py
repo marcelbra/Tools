@@ -37,21 +37,27 @@ class CRFTagger:
 
     def fit(self):
 
-        #weights = self.init_scores(_, mode="weight")
         data = self.get_data()
 
         for words, tags in data:
-
-            # Expected feature values
-            #alpha = self.forward(words, weights)
-            #betas = self.backward(words, weights)
-            #gammas = self.get_estimated_feature_values(words, weights, alphas, betas)
+            weights = self.init_scores(tags, words, mode="weight")
 
             # Observed feature values
             for ix, word in enumerate(words):
                 tag = tags[ix]
                 prev_tag = tags[ix-1]
-                feature_vec = self.feature_vector(prev_tag, tag, words, ix)
+                extracted_feats = self.feature_extraction(prev_tag, tag, words, ix)
+                weights = {feat: 0 for feat in extracted_feats.keys()}
+                feature_vec = self.feature_vector(extracted_feats)
+
+
+            # Expected feature values
+            alphas = self.forward(words, weights)
+            betas = self.backward(words, weights)
+            gammas = self.get_estimated_feature_values(words, weights, alphas, betas)
+
+
+
 
 
     def get_estimated_feature_values(self, words, weights, alphas, betas):
@@ -93,7 +99,7 @@ class CRFTagger:
                     betas[i][tag] = log_sum_exp(betas[i][tag], score)
         return betas
 
-    def feature_vector(self, prevtag, tag, words, i):
+    def feature_extraction(self, prevtag, tag, words, i):
         features = []
         word_to_tag = word_tag(tag, words, i)
         features.append(str(word_to_tag))
@@ -107,11 +113,15 @@ class CRFTagger:
         features.append(str(word_shape_to_tag))
 
         feature_count = Counter(features)
-        feature_vec = list(feature_count.values())
+        return feature_count
+
+    def feature_vector(self, feat_freq_dict):
+
+        feature_vec = list(feat_freq_dict.values())
 
         return feature_vec
 
-    def init_scores(self, words, mode):
+    def init_scores(self, tags, words, mode):
         """Initializer for alpha, beta, gamma and weight scores."""
         if mode=="gamma":
             structure = [{tag: {tag: 1 if tag=="A" else 0
@@ -123,7 +133,7 @@ class CRFTagger:
                           for tag in self.tagset}
                          for _ in words]
         elif mode=="weight":
-            structure = [1 for _ in range(len(self.feature_functions))]
+            structure = defaultdict()
         return structure
 
     def get_tagset(self):  # 54 tags together with BOUNDARY
