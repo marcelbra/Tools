@@ -40,58 +40,43 @@ class CRFTagger:
         data = self.get_data()
 
         for words, tags in data:
-            weights = self.init_scores(tags, words, mode="weight")
+            weights = self.init_scores(mode="weight")
 
             # Observed feature values
             for ix, word in enumerate(words):
                 tag = tags[ix]
                 prev_tag = tags[ix-1]
-                extracted_feats = self.feature_extraction(prev_tag, tag, words, ix)
-                weights = {feat: 0 for feat in extracted_feats.keys()}
-                feature_vec = self.feature_vector(extracted_feats)
+                weights = {feat: 0 for feat in self.feature_extraction(prev_tag, tag, words, ix).keys()}
+                feature_vec = self.feature_vector(prev_tag, tag, words, ix)
 
-
-            # Expected feature values
+                # Expected feature values
             alphas = self.forward(words, weights)
             betas = self.backward(words, weights)
             gammas = self.get_estimated_feature_values(words, weights, alphas, betas)
-
-
-
 
 
     def get_estimated_feature_values(self, words, weights, alphas, betas):
         """
         Calulates gamma values for the word sequence, given alphas and betas.
         """
-        weights_for_score = []
         gammas = self.init_scores(words, mode="gammas")
         for i in range(1, len(words)):
             for tag, beta_score in betas[i]:
                 for previous_tag, alpha_score in alphas[i-1]:
-                    feature_count = self.feature_extraction(previous_tag, tag, words, i)
-                    feature_vector = self.feature_vector(feature_count)
-                    for feature in feature_count:
-                        for feat in weights:
-                            if feature == feat:
-                                weights_for_score.append(weights[feat])
+                    feature_vector = self.feature_vector(prevtag_tag, tag, words, i)
                     score = mul(feature_vector, weights)
-                    gamma = alphas[i-1][previous_tag] + score + betas[i][tag] - alphas[-1]["<s>"]
-                    gammas[i][tag][previous_tag] += gamma
+                    #gamma = alphas[i-1][previous_tag] + score + betas[i][tag] - alphas[-1]["<s>"]
+                    p = alpha_score + score + beta_score - alphas[-1]["<s>"]
+                    #gammas[i][tag][previous_tag] += gamma
+                    gammas += p * feature_vector
         return gammas
 
     def forward(self, words, weights):
         alphas = self.init_scores(words, mode="alpha")
-        weights_for_score = []
         for i in range(1, len(words)):
             for tag in self.tagset:
                 for previous_tag, previous_score in alphas[i-1].items():
-                    feature_count = self.feature_extraction(previous_tag, tag, words, i)
-                    feature_vector = self.feature_vector(feature_count)
-                    for feature in feature_count:
-                        for feat in weights:
-                            if feature == feat:
-                                weights_for_score.append(weights[feat])
+                    feature_vector = self.feature_vector(prevtag_tag, tag, words, i)
                     score = previous_score + mul(feature_vector, weights)
                     alphas[i][tag] = log_sum_exp(alphas[i][tag], score)
         return alphas
@@ -102,24 +87,16 @@ class CRFTagger:
         In slides we said beta(i-1) is dependent on beta(i). That's equivalent to saying
         beta(i) is dependent on beta(i+1) (makes the handling of indices more convenient).
         """
-        weights_for_score = []
         betas = self.init_scores(words, mode="beta")
         for i in range(len(words) - 1)[::-1]:
             for tag in self.tagset:
                 for next_tag, next_score in betas[i+1].items():
-                    feature_count = self.feature_extraction(tag, next_tag, words, i)
-                    feature_vector = self.feature_vector(feature_count)
-                    for feature in feature_count:
-                        for feat in weights:
-                            if feature == feat:
-                                weights_for_score.append(weights[feat])
+                    feature_vector = self.feature_vector(tag, next_tag, words, i)
                     score = next_score + mul(feature_vector, weights)
                     betas[i][tag] = log_sum_exp(betas[i][tag], score)
         return betas
 
     def feature_extraction(self, prevtag, tag, words, i):
-        """Extracts features and stores them in a list as strings -> Counter method returns dict of frequency count
-        for each feature"""
         features = []
         word_to_tag = word_tag(tag, words, i)
         features.append(str(word_to_tag))
@@ -135,14 +112,14 @@ class CRFTagger:
         feature_count = Counter(features)
         return feature_count
 
-    def feature_vector(self, feat_freq_dict):
-        # extracts feature vector from dict of fequency count of features
-        feature_vec = list(feat_freq_dict.values())
-
+    def feature_vector(self, prevtag_tag, tag, words, i):
+        extracted_freqs = self.feature_extraction(prevtag_tag, tag, words, i)
+        feature_vec = list(extracted_freqs.values())
         return feature_vec
 
-    def init_scores(self, tags, words, mode):
+    def init_scores(self, mode, *tags, **words):
         """Initializer for alpha, beta, gamma and weight scores."""
+        structure = None
         if mode=="gamma":
             structure = [{tag: {tag: 1 if tag=="A" else 0
                                 for tag in tags}
