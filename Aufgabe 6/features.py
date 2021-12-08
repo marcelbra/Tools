@@ -4,46 +4,45 @@ Extract features.
 
 import string
 
-def word_tag(ix, words, tags):
+def word_tag(tag, words, ix):
     # Extract word-tag feature
-    word, tag = (words[ix], tags[ix])
+    word, tag = (words[ix], tag)
 
     return word, tag
 
 
-def prevtag_tag(ix, tags):
+def prevtag_tag(prevtag, tag, ix):
     # extract previous tag for given index
     if ix == 0:
-        prevtag, tag = (" ", tags[ix])
+        prevtag, tag = (" ", tag)
     elif ix > 0:
-        prevtag, tag = (tags[ix-1], tags[ix])
+        prevtag, tag = (prevtag, tag)
 
     return prevtag, tag
 
 
-def prevtag_word_tag(ix, words, tags):
+def prevtag_word_tag(prevtag, tag, words, ix):
     # extract previous tag, current word and current tag for given index
     if ix == 0:
-        prev_tag, word, tag = (" ", words[ix], tags[ix])
+        prev_tag, word, tag = (" ", words[ix], tag)
     elif ix > 0:
-        prev_tag, tag, word = (tags[ix - 1], tags[ix], words[ix])
+        prev_tag, tag, word = (prevtag, tag, words[ix])
 
     return prev_tag, tag, word
 
 
-def substrings_tag(ix, words, tags):
+def substrings_tag(words):
     # extract all substrings between length 3-6 for word at current index, tag at current index
-    ngrams_tag = []
     ngrams = []
-    for gram_size in range(3, 7):
-        grams = [words[ix][i:i + gram_size] for i in range(len(words[ix]) - gram_size + 1)]
-        ngrams.extend(grams)
-    ngrams_tag.append((ngrams, tags[ix]))
+    for word in words:
+        for gram_size in range(3, 7):
+            grams = [word[i:i + gram_size] for i in range(len(word) - gram_size + 1)]
+            ngrams.extend(grams)
 
-    return ngrams_tag
+    return ngrams
 
 
-def word_shape_tag(ix, words, tags):
+def word_shape_tag(tag, words, ix):
     """Convert words to shapes depending on lowercase/ uppercase/ digits e.g. Testwort-717 -> Xx-0
     Return word shape, tag at current index"""
     word = words[ix]
@@ -55,6 +54,6 @@ def word_shape_tag(ix, words, tags):
         elif str.isdigit(char):
             word = word.replace(char, "0")
         word = "".join(set(word))
-    word_shape, tag = (word, tags[ix])
+    word_shape, tag = (word, tag)
 
     return word_shape, tag

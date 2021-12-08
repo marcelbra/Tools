@@ -48,6 +48,10 @@ class CRFTagger:
             gammas = self.get_estimated_feature_values(words, weights, alphas, betas)
 
             # Observed feature values
+            for ix, word in enumerate(words):
+                tag = tags[ix]
+                prev_tag = tags[ix-1]
+                feature_vec = self.feature_vector(prev_tag, tag, words, ix)
 
 
     def get_estimated_feature_values(self, words, weights, alphas, betas):
@@ -89,8 +93,23 @@ class CRFTagger:
                     betas[i][tag] = log_sum_exp(betas[i][tag], score)
         return betas
 
-    def feature_vector(self, previous_tag, tag, words, i):
-        pass #TODO
+    def feature_vector(self, prevtag, tag, words, i):
+        features = []
+        word_to_tag = word_tag(tag, words, i)
+        features.append(str(word_to_tag))
+        prevtag_to_tag = prevtag_tag(prevtag, tag, i)
+        features.append(str(prevtag_to_tag))
+        prevtag_to_word_to_tag = prevtag_word_tag(prevtag, tag, words, i)
+        features.append(str(prevtag_to_word_to_tag))
+        ngrams = substrings_tag(words)
+        features.extend(ngrams)
+        word_shape_to_tag = word_shape_tag(tag, words, i)
+        features.append(str(word_shape_to_tag))
+
+        feature_count = Counter(features)
+        feature_vec = list(feature_count.values())
+
+        return feature_vec
 
     def init_scores(self, words, mode):
         """Initializer for alpha, beta, gamma and weight scores."""
@@ -106,14 +125,6 @@ class CRFTagger:
         elif mode=="weight":
             structure = [1 for _ in range(len(self.feature_functions))]
         return structure
-
-    def extract_features(self, i, words, tags):
-        word_to_tag = word_tag(i, words, tags)
-        prevtag_to_tag = prevtag_tag(i, tags)
-        prevtag_to_word_to_tag = prevtag_word_tag(i, words, tags)
-        ngrams_to_tag = substrings_tag(i, words, tags)
-        word_shape_to_tag = word_shape_tag(i, words, tags)
-        return word_to_tag, prevtag_to_tag, prevtag_to_word_to_tag, ngrams_to_tag, word_shape_to_tag
 
     def get_tagset(self):  # 54 tags together with BOUNDARY
         sentences = self.get_data()
