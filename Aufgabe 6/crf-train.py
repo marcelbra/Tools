@@ -79,7 +79,8 @@ class CRFTagger:
         for i in range(1, len(words)):
             for tag in self.tagset:
                 for previous_tag, previous_score in alphas[i-1].items():
-                    feature_vector = self.feature_vector(previous_tag, tag, words, i)
+                    feature_count = self.feature_extraction(previous_tag, tag, words, i)
+                    feature_vector = self.feature_vector(feature_count)
                     score = previous_score + mul(feature_vector, weights)
                     alphas[i][tag] = log_sum_exp(alphas[i][tag], score)
         return alphas
@@ -94,12 +95,15 @@ class CRFTagger:
         for i in range(len(words) - 1)[::-1]:
             for tag in self.tagset:
                 for next_tag, next_score in betas[i+1].items():
-                    feature_vector = self.feature_vector(tag, next_tag, words, i)
+                    feature_counts = self.feature_extraction(tag, next_tag, words, i)
+                    feature_vector = self.feature_vector(feature_counts)
                     score = next_score + mul(feature_vector, weights)
                     betas[i][tag] = log_sum_exp(betas[i][tag], score)
         return betas
 
     def feature_extraction(self, prevtag, tag, words, i):
+        """Extracts features and stores them in a list as strings -> Counter method returns dict of frequency count
+        for each feature"""
         features = []
         word_to_tag = word_tag(tag, words, i)
         features.append(str(word_to_tag))
@@ -116,7 +120,7 @@ class CRFTagger:
         return feature_count
 
     def feature_vector(self, feat_freq_dict):
-
+        # extracts feature vector from dict of fequency count of features
         feature_vec = list(feat_freq_dict.values())
 
         return feature_vec
