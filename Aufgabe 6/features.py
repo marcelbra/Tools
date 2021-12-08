@@ -35,6 +35,7 @@ def substrings_tag(tag, words):
     # extract all substrings between length 3-6 for word at current index, tag at current index
     ngrams = []
     for word in words:
+        word = " " + word + " "
         for gram_size in range(3, 7):
             grams = [word[i:i + gram_size] for i in range(len(word) - gram_size + 1)]
             ngrams.extend((gram, tag) for gram in grams)
