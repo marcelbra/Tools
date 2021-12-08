@@ -37,15 +37,15 @@ class CRFTagger:
 
     def fit(self):
 
-        weights = self.init_scores(_, mode="weight")
+        #weights = self.init_scores(_, mode="weight")
         data = self.get_data()
 
         for words, tags in data:
 
             # Expected feature values
-            alpha = self.forward(words, weights)
-            betas = self.backward(words, weights)
-            gammas = self.get_estimated_feature_values(words, weights, alphas, betas)
+            #alpha = self.forward(words, weights)
+            #betas = self.backward(words, weights)
+            #gammas = self.get_estimated_feature_values(words, weights, alphas, betas)
 
             # Observed feature values
             for ix, word in enumerate(words):
@@ -101,8 +101,8 @@ class CRFTagger:
         features.append(str(prevtag_to_tag))
         prevtag_to_word_to_tag = prevtag_word_tag(prevtag, tag, words, i)
         features.append(str(prevtag_to_word_to_tag))
-        ngrams = substrings_tag(words)
-        features.extend(ngrams)
+        ngrams_tag = substrings_tag(tag, words)
+        features.extend(ngrams_tag)
         word_shape_to_tag = word_shape_tag(tag, words, i)
         features.append(str(word_shape_to_tag))
 

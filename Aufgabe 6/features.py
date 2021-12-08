@@ -31,13 +31,13 @@ def prevtag_word_tag(prevtag, tag, words, ix):
     return prev_tag, tag, word
 
 
-def substrings_tag(words):
+def substrings_tag(tag, words):
     # extract all substrings between length 3-6 for word at current index, tag at current index
     ngrams = []
     for word in words:
         for gram_size in range(3, 7):
             grams = [word[i:i + gram_size] for i in range(len(word) - gram_size + 1)]
-            ngrams.extend(grams)
+            ngrams.extend((gram, tag) for gram in grams)
 
     return ngrams
 
