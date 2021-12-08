@@ -64,11 +64,17 @@ class CRFTagger:
         """
         Calulates gamma values for the word sequence, given alphas and betas.
         """
+        weights_for_score = []
         gammas = self.init_scores(words, mode="gammas")
         for i in range(1, len(words)):
             for tag, beta_score in betas[i]:
                 for previous_tag, alpha_score in alphas[i-1]:
-                    feature_vector = self.feature_vector(previous_tag, tag, words, i)
+                    feature_count = self.feature_extraction(previous_tag, tag, words, i)
+                    feature_vector = self.feature_vector(feature_count)
+                    for feature in feature_count:
+                        for feat in weights:
+                            if feature == feat:
+                                weights_for_score.append(weights[feat])
                     score = mul(feature_vector, weights)
                     gamma = alphas[i-1][previous_tag] + score + betas[i][tag] - alphas[-1]["<s>"]
                     gammas[i][tag][previous_tag] += gamma
@@ -76,11 +82,16 @@ class CRFTagger:
 
     def forward(self, words, weights):
         alphas = self.init_scores(words, mode="alpha")
+        weights_for_score = []
         for i in range(1, len(words)):
             for tag in self.tagset:
                 for previous_tag, previous_score in alphas[i-1].items():
                     feature_count = self.feature_extraction(previous_tag, tag, words, i)
                     feature_vector = self.feature_vector(feature_count)
+                    for feature in feature_count:
+                        for feat in weights:
+                            if feature == feat:
+                                weights_for_score.append(weights[feat])
                     score = previous_score + mul(feature_vector, weights)
                     alphas[i][tag] = log_sum_exp(alphas[i][tag], score)
         return alphas
@@ -91,12 +102,17 @@ class CRFTagger:
         In slides we said beta(i-1) is dependent on beta(i). That's equivalent to saying
         beta(i) is dependent on beta(i+1) (makes the handling of indices more convenient).
         """
+        weights_for_score = []
         betas = self.init_scores(words, mode="beta")
         for i in range(len(words) - 1)[::-1]:
             for tag in self.tagset:
                 for next_tag, next_score in betas[i+1].items():
-                    feature_counts = self.feature_extraction(tag, next_tag, words, i)
-                    feature_vector = self.feature_vector(feature_counts)
+                    feature_count = self.feature_extraction(tag, next_tag, words, i)
+                    feature_vector = self.feature_vector(feature_count)
+                    for feature in feature_count:
+                        for feat in weights:
+                            if feature == feat:
+                                weights_for_score.append(weights[feat])
                     score = next_score + mul(feature_vector, weights)
                     betas[i][tag] = log_sum_exp(betas[i][tag], score)
         return betas
