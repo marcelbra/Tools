@@ -10,14 +10,10 @@ Sinem Kühlewind (geb. Demiraslan)
 import os
 import sys
 from collections import Counter
-from utils import (add, div, mul,
+from utils import (add, div, mul, log_sum_exp,
                    sub, dot, create_vec,
-                   log_sum_exp,)
-from features import (word_tag,
-                      prevtag_tag,
-                      prevtag_word_tag,
-                      substrings_tag,
-                      word_shape_tag,)
+                   get_substrings_tag,
+                   get_word_shape,)
 from collections import defaultdict
 import re
 
@@ -29,28 +25,23 @@ class CRFTagger:
         self.data_file = data_file
         self.paramfile = paramfile
         self.tagset = self.get_tagset()
-        self.feature_functions = [word_tag,
-                                  prevtag_tag,
-                                  prevtag_word_tag,
-                                  substrings_tag,
-                                  word_shape_tag]
 
     def fit(self):
 
         data = self.get_data()
+        weights = defaultdict(float)
 
         for words, tags in data:
-            weights = self.init_scores(mode="weight")
 
             # Observed feature values
-            for ix, word in enumerate(words):
-                tag = tags[ix]
-                prev_tag = tags[ix-1]
-                weights = {feat: 0 for feat in self.feature_extraction(prev_tag, tag, words, ix).keys()}
-                feature_count = self.feature_extraction(prev_tag, tag, words, ix)
-                feat_vec = self.feature_vector(feature_count)
+            for i, word in enumerate(words):
+                if not i: continue
+                tag = tags[i]
+                prev_tag = tags[i-1]
+                feature_count = self.feature_extraction(prev_tag, tag, words, i)
+                weights = dict(weights, **feature_count)
 
-                # Expected feature values
+            # Expected feature values
             alphas = self.forward(words, weights)
             betas = self.backward(words, weights)
             gammas = self.get_estimated_feature_values(words, weights, alphas, betas)
@@ -113,21 +104,19 @@ class CRFTagger:
                     weights_for_score.append(weights[feat])
         return weights_for_score
 
-
     def feature_extraction(self, prevtag, tag, words, i):
-        features = []
-        word_to_tag = word_tag(tag, words, i)
-        features.append(str(word_to_tag))
-        prevtag_to_tag = prevtag_tag(prevtag, tag, i)
-        features.append(str(prevtag_to_tag))
-        prevtag_to_word_to_tag = prevtag_word_tag(prevtag, tag, words, i)
-        features.append(str(prevtag_to_word_to_tag))
-        ngrams_tag = substrings_tag(tag, words)
-        features.extend(ngrams_tag)
-        word_shape_to_tag = word_shape_tag(tag, words, i)
-        features.append(str(word_shape_to_tag))
 
-        feature_count = Counter(features)
+        word_tag = words[i], tag
+        prevtag_tag = prevtag, tag
+        prevtag_word_tag = prevtag, tag, words[i]
+        word_shape_tag = get_word_shape(words[i]), tag
+        ngrams_tag = get_substrings_tag(tag, words)
+
+        features = [word_tag, prevtag_tag, prevtag_word_tag,
+                    word_shape_tag] + ngrams_tag
+
+        feature_count = {str(k):v for k,v in Counter(features).items()}
+
         return feature_count
 
     def feature_vector(self, prevtag_tag, tag, words, i):
@@ -156,16 +145,6 @@ class CRFTagger:
         self.tagset = list(set([re.sub("[|]", '', taglist) for sentence, sent_tags in sentences
                                 for taglist in sent_tags]))
         return self.tagset
-
-    def aposteriori(self, position):
-        """
-        Computes aposteriori probabilities of each t in T at position i.
-        1.) gamma_t(i) = (alpha_t(i) * beta_t(i)) / (alpha_<s>(n+1)) for all t in T
-        2.) gamma_tt-1(i) = (alpha_t(i-1) * z(t, t-1, [w for w in range(n+1)], i) * beta_t-1(i)) / alpha_<s>(n+1)
-        for all t and t-1 in T
-        :return: aposteriori probabilities
-        """
-        pass
 
     def get_data(self):
         """
