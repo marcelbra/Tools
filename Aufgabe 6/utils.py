@@ -53,7 +53,7 @@ def get_substrings_tag(tag, words):
     ngrams = []
     for word in words:
         word = " " + word + " "
-        for gram_size in range(3, 7):
+        for gram_size in range(3,7):# 7):
             grams = [word[i:i + gram_size] for i in range(len(word) - gram_size + 1)]
             ngrams.extend((gram, tag) for gram in grams)
     return ngrams
