@@ -83,9 +83,9 @@ class CRFTagger:
                 for previous_tag, previous_score in alphas[i-1].items():
                     feature_count = self.feature_extraction(previous_tag, tag, words, i)
                     feature_vector = list(feature_count.values())
-                    #TODO: Hier kommen wir von der 0 nicht weg, weil self.get_score anfangs einen reinen 0-Vektor zurückgibt
                     score = self.get_score(feature_count, weights)
-                    score = previous_score + dot(feature_vector, score)
+                    # TODO: Hier kommen wir ohne exponieren eigtl nicht von der 0 weg?!
+                    score = math.exp(previous_score + dot(feature_vector, score))
                     alphas[i][tag] = log_sum_exp(alphas[i][tag], score)
         return alphas
 
