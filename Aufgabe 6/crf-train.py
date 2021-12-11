@@ -9,6 +9,7 @@ Sinem Kühlewind (geb. Demiraslan)
 
 import os
 import sys
+import math
 from collections import Counter
 from utils import (add, div, mul, log_sum_exp,
                    sub, dot, create_vec,
@@ -18,6 +19,7 @@ from collections import defaultdict
 import re
 from tqdm import tqdm
 
+
 class CRFTagger:
 
     def __init__(self, data_file, paramfile):
@@ -25,6 +27,8 @@ class CRFTagger:
         self.data_file = data_file
         self.paramfile = paramfile
         self.tagset = self.get_tagset()
+        self.epochs = 3
+        self.lr = 1e-5
 
     def fit(self):
 
@@ -32,25 +36,26 @@ class CRFTagger:
 
         print("Load data")
         data = self.get_data()
-
         data = data[:100]  # Delete, only for debugging
+
 
         # Observed feature values
         weights = defaultdict(float)
-        for words, tags in tqdm(data):
-            for i, word in enumerate(words):
-                if not i: continue
-                tag = tags[i]
-                prev_tag = tags[i-1]
-                feature_count = self.feature_extraction(prev_tag, tag, words, i)
-                weights = defaultdict(int, dict(weights, **feature_count))
+
+        for n in range(self.epochs):
+            for words, tags in tqdm(data):
+                for i, word in enumerate(words):
+                    if not i: continue
+                    tag = tags[i]
+                    prev_tag = tags[i-1]
+                    feature_count = self.feature_extraction(prev_tag, tag, words, i)
+                    weights = defaultdict(int, dict(weights, **feature_count))
 
         # Expected feature values
-        for words, tags in tqdm(data):
-            for i, word in enumerate(words):
-                alphas = self.forward(words, weights)
-                betas = self.backward(words, weights)
-                gammas = self.get_estimated_feature_values(words, weights, alphas, betas)
+                    alphas = self.forward(words, weights)
+                    betas = self.backward(words, weights)
+                    gammas = self.get_estimated_feature_values(words, weights, alphas, betas)
+
 
     def get_estimated_feature_values(self, words, weights, alphas, betas):
         """
@@ -64,6 +69,9 @@ class CRFTagger:
                     feature_vector = list(feature_count.values())
                     s = self.get_score(feature_count, weights)
                     score = gammas[i][tag][previous_tag] + dot(feature_vector, s)
+                    # TODO: Denke, der Score muss noch zum Exponenten genommen werden
+                    score = math.exp(score)
+                    #TODO: Andere Gruppe hat hier die Rechnung ohne Score, allerdings machen wir es ja nach ytt(i)
                     p = alpha_score + score + beta_score - alphas[-1]["BOUNDARY"]
                     gammas[i][tag][previous_tag] = p
         return gammas
@@ -75,6 +83,7 @@ class CRFTagger:
                 for previous_tag, previous_score in alphas[i-1].items():
                     feature_count = self.feature_extraction(previous_tag, tag, words, i)
                     feature_vector = list(feature_count.values())
+                    #TODO: Hier kommen wir von der 0 nicht weg, weil self.get_score anfangs einen reinen 0-Vektor zurückgibt
                     score = self.get_score(feature_count, weights)
                     score = previous_score + dot(feature_vector, score)
                     alphas[i][tag] = log_sum_exp(alphas[i][tag], score)
