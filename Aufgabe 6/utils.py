@@ -4,7 +4,6 @@ Helper file for various operations.
 
 from typing import List, Union
 import math
-import string
 import re
 
 Numeric = Union[int, float]
@@ -12,22 +11,22 @@ Vector = List[Numeric]
 
 def add(list_1: Vector,
         list_2: Vector
-        ) -> Numeric:
+        ) -> Vector:
     return [x + list_2[i] for i, x in enumerate(list_1)]
 
 def sub(list_1: Vector,
         list_2: Vector
-        ) -> Numeric:
+        ) -> Vector:
     return [x - list_2[i] for i, x in enumerate(list_1)]
 
 def mul(list_1: Vector,
         list_2: Vector
-        ) -> Numeric:
+        ) -> Vector:
     return [x * list_2[i] for i, x in enumerate(list_1)]
 
 def div(list_1: Vector,
         list_2: Vector
-        )-> Numeric:
+        )-> Vector:
     return [x / list_2[i] for i, x in enumerate(list_1)]
 
 def dot(list_1: Vector,

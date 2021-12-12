@@ -27,8 +27,7 @@ class CRFTagger:
         self.data_file = data_file
         self.paramfile = paramfile
         self.tagset = self.get_tagset()
-        self.epochs = 3
-        self.lr = 1e-5
+        self.sentences = ""  # is being filled in get_data function
 
     def fit(self):
 
@@ -36,25 +35,26 @@ class CRFTagger:
 
         print("Load data")
         data = self.get_data()
-        data = data[:100]  # Delete, only for debugging
+        data = data[:10]  # Delete, only for debugging
+        learning_rate = 1e-5
 
-
-        # Observed feature values
         weights = defaultdict(float)
-
-        for n in range(self.epochs):
+        for epoch in range(3):
             for words, tags in tqdm(data):
                 for i, word in enumerate(words):
                     if not i: continue
+        # Observed feature values
                     tag = tags[i]
                     prev_tag = tags[i-1]
                     feature_count = self.feature_extraction(prev_tag, tag, words, i)
                     weights = defaultdict(int, dict(weights, **feature_count))
-
         # Expected feature values
                     alphas = self.forward(words, weights)
                     betas = self.backward(words, weights)
                     gammas = self.get_estimated_feature_values(words, weights, alphas, betas)
+
+                    gradient = sub(feature_count, gammas)     # was sind die observed_feature_values und estimated fv
+                    weights = add(learning_rate * gradient, weights) # ??
 
 
     def get_estimated_feature_values(self, words, weights, alphas, betas):
@@ -85,7 +85,7 @@ class CRFTagger:
                     feature_vector = list(feature_count.values())
                     score = self.get_score(feature_count, weights)
                     # TODO: Hier kommen wir ohne exponieren eigtl nicht von der 0 weg?!
-                    score = math.exp(previous_score + dot(feature_vector, score))
+                    score = previous_score + dot(feature_vector, score)
                     alphas[i][tag] = log_sum_exp(alphas[i][tag], score)
         return alphas
 
@@ -110,7 +110,6 @@ class CRFTagger:
         return [weights[feat] if feat in weights else 0 for feat in feat_count]
 
     def feature_extraction(self, prevtag, tag, words, i):
-
         word_tag = words[i], tag
         prevtag_tag = prevtag, tag
         prevtag_word_tag = prevtag, tag, words[i]
@@ -126,15 +125,16 @@ class CRFTagger:
 
     def init_scores(self, mode, words):
         """Initializer for alpha, beta, gamma and weight scores."""
-        if mode=="gammas":
-            structure = [{tag: {tag: 1 if tag=="BOUNDARY" else 0
+        if mode == "gammas":
+            structure = [{tag: {tag: 1 if tag == "BOUNDARY" else 0
                                 for tag in self.tagset}
                           for tag in self.tagset}
                          for _ in words]
-        elif mode=="alpha" or mode=="beta":
-            structure = [{tag: 1 if tag=="BOUNDARY" else 0
+        elif mode == "alpha" or mode == "beta":
+            structure = [{tag: 1 if tag == "BOUNDARY" else 0
                           for tag in self.tagset}
                          for _ in words]
+        else: structure = None
         return structure
 
     def get_tagset(self):  # 54 tags together with BOUNDARY
