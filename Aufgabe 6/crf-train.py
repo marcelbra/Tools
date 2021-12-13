@@ -1,6 +1,7 @@
 """
 P7 Tools - Aufgabe 6
 Training of CRF Tagger
+
 Gruppe:
 Marcel Braasch
 Nadja Seeberg
@@ -17,125 +18,104 @@ from utils import (add, div, mul, log_sum_exp,
                    get_word_shape,)
 from collections import defaultdict
 import re
-from tqdm import tqdm
-
 
 class CRFTagger:
 
     def __init__(self, data_file, paramfile):
-
         self.data_file = data_file
         self.paramfile = paramfile
         self.tagset = self.get_tagset()
-        self.sentences = ""  # is being filled in get_data function
+        self.weights = defaultdict(float)
 
-    def fit(self):
-
-        # TODO: data restriction raus, n-gram wieder 3,7
-
-        print("Load data")
-        data = self.get_data()
-        data = data[:10]  # Delete, only for debugging
-        learning_rate = 1e-5
-
-        weights = defaultdict(float)
+    def fit(self, learning_rate=1e-5):
         for epoch in range(3):
-            for words, tags in tqdm(data):
+            for words, tags in self.get_data():
                 for i, word in enumerate(words):
                     if not i: continue
-        # Observed feature values
-                    tag = tags[i]
-                    prev_tag = tags[i-1]
-                    feature_count = self.feature_extraction(prev_tag, tag, words, i)
-                    weights = defaultdict(int, dict(weights, **feature_count))
-        # Expected feature values
-                    alphas = self.forward(words, weights)
-                    betas = self.backward(words, weights)
-                    gammas = self.get_estimated_feature_values(words, weights, alphas, betas)
+                    alphas = self.forward(words)
+                    betas = self.backward(words)
+                    estimated_frequencies = self.get_estimated_feature_values(words, alphas, betas)
+                    observed_frequencies = self.feature_extraction(tags[i-1], tags[i], words, i)
+                    self.weight_update(estimated_frequencies, observed_frequencies, learning_rate)
+        self.save_weights()
 
-                    gradient = sub(feature_count, gammas)     # was sind die observed_feature_values und estimated fv
-                    weights = add(learning_rate * gradient, weights) # ??
+    def weight_update(self, estimated_frequencies, observed_frequencies, learning_rate):
+        for feature, value in estimated_frequencies.items():
+            self.weights[feature] -= value * learning_rate
+        for feature, value in observed_frequencies.items():
+            self.weights[feature] += value * learning_rate
 
-
-    def get_estimated_feature_values(self, words, weights, alphas, betas):
+    def get_estimated_feature_values(self, words, alphas, betas):
         """
         Calulates gamma values for the word sequence, given alphas and betas.
         """
-        gammas = self.init_scores(mode="gammas", words=words)
+        gammas = defaultdict(float)
         for i in range(1, len(words)):
             for tag, beta_score in betas[i].items():
+
+                # Calculate gamma for lexical features
+                lexical_features = self.get_lexical_features(tag, words, i)
+                for feature in lexical_features:
+                    gammas[feature] = math.exp(alphas[i][tag] + betas[i][tag] - alphas[-1]["BOUNDARY"])
+
+                # Calculate gamma for context features
                 for previous_tag, alpha_score in alphas[i-1].items():
-                    feature_count = self.feature_extraction(previous_tag, tag, words, i)
-                    feature_vector = list(feature_count.values())
-                    s = self.get_score(feature_count, weights)
-                    score = gammas[i][tag][previous_tag] + dot(feature_vector, s)
-                    # TODO: Denke, der Score muss noch zum Exponenten genommen werden
-                    score = math.exp(score)
-                    #TODO: Andere Gruppe hat hier die Rechnung ohne Score, allerdings machen wir es ja nach ytt(i)
-                    p = alpha_score + score + beta_score - alphas[-1]["BOUNDARY"]
-                    gammas[i][tag][previous_tag] = p
+                    frequencies = self.feature_extraction(previous_tag, tag, words, i)
+                    context_features = self.get_context_features(previous_tag, tag, words, i)
+                    score = math.exp(sum(frequencies[f"{feature}"] * self.weights[feature] for feature in context_features))
+                    for feature in context_features:
+                        gammas[feature] = math.exp(alphas[i - 1][tag] + betas[i][previous_tag]
+                                                   + score - alphas[-1]["BOUNDARY"])
         return gammas
 
-    def forward(self, words, weights):
-        alphas = self.init_scores(mode="alpha", words=words)
-        for i in tqdm(range(1, len(words))):
+    def forward(self, words):
+        alphas = self.init_scores(words)
+        for i in range(1, len(words)):
             for tag in self.tagset:
                 for previous_tag, previous_score in alphas[i-1].items():
-                    feature_count = self.feature_extraction(previous_tag, tag, words, i)
-                    feature_vector = list(feature_count.values())
-                    score = self.get_score(feature_count, weights)
-                    # TODO: Hier kommen wir ohne exponieren eigtl nicht von der 0 weg?!
-                    score = previous_score + dot(feature_vector, score)
-                    alphas[i][tag] = log_sum_exp(alphas[i][tag], score)
+                    alphas = self.step(alphas, previous_tag, tag, words, i, previous_score)
         return alphas
 
-    def backward(self, words, weights):
-        """
-        We iterate backward from n to 0. The recursion looks at the right position of i.
-        In slides we said beta(i-1) is dependent on beta(i). That's equivalent to saying
-        beta(i) is dependent on beta(i+1) (makes the handling of indices more convenient).
-        """
-        betas = self.init_scores(mode="beta", words=words)
-        for i in tqdm(range(len(words) - 1)[::-1]):
+    def backward(self, words):
+        betas = self.init_scores(words)
+        for i in range(len(words) - 1)[::-1]:
             for tag in self.tagset:
                 for next_tag, next_score in betas[i+1].items():
-                    feature_count = self.feature_extraction(tag, next_tag, words, i)
-                    feature_vector = list(feature_count.values())
-                    score = self.get_score(feature_count, weights)
-                    score = next_score + dot(feature_vector, score)
-                    betas[i][tag] = log_sum_exp(betas[i][tag], score)
+                    betas = self.step(betas, next_tag, tag, words, i, next_score)
         return betas
 
-    def get_score(self, feat_count, weights):
-        return [weights[feat] if feat in weights else 0 for feat in feat_count]
+    def step(self, values, previous_next_tag, tag, words, i, prev_next_score):
+        feature_count = self.feature_extraction(previous_next_tag, tag, words, i)
+        feature_vector = list(feature_count.values())
+        score = self.get_score(feature_count)
+        score = prev_next_score + dot(feature_vector, score)
+        values[i][tag] = log_sum_exp(values[i][tag], score)
+        return values
 
-    def feature_extraction(self, prevtag, tag, words, i):
+    def get_score(self, feat_count):
+        return [self.weights[feat] if feat in self.weights else 0 for feat in feat_count]
+
+    def get_lexical_features(self, tag, words, i):
         word_tag = words[i], tag
-        prevtag_tag = prevtag, tag
-        prevtag_word_tag = prevtag, tag, words[i]
         word_shape_tag = get_word_shape(words[i]), tag
         ngrams_tag = get_substrings_tag(tag, words)
+        return [word_tag, word_shape_tag] + ngrams_tag
 
-        features = [word_tag, prevtag_tag, prevtag_word_tag,
-                    word_shape_tag] + ngrams_tag
+    def get_context_features(self, prevtag, tag, words, i):
+        prevtag_tag = prevtag, tag
+        prevtag_word_tag = prevtag, tag, words[i]
+        return [prevtag_tag, prevtag_word_tag]
 
+    def feature_extraction(self, prevtag, tag, words, i):
+        lexical = self.get_lexical_features(tag, words, i)
+        context = self.get_context_features(prevtag, tag, words, i)
+        features = lexical + context
         feature_count = {str(k):v for k,v in Counter(features).items()}
-
         return feature_count
 
-    def init_scores(self, mode, words):
+    def init_scores(self, words):
         """Initializer for alpha, beta, gamma and weight scores."""
-        if mode == "gammas":
-            structure = [{tag: {tag: 1 if tag == "BOUNDARY" else 0
-                                for tag in self.tagset}
-                          for tag in self.tagset}
-                         for _ in words]
-        elif mode == "alpha" or mode == "beta":
-            structure = [{tag: 1 if tag == "BOUNDARY" else 0
-                          for tag in self.tagset}
-                         for _ in words]
-        else: structure = None
-        return structure
+        return [{tag: 1 if tag == "BOUNDARY" else 0 for tag in self.tagset} for _ in words]
 
     def get_tagset(self):  # 54 tags together with BOUNDARY
         sentences = self.get_data()
@@ -148,18 +128,28 @@ class CRFTagger:
         Reads data and appends boundary token <s> to start and end of sentence.
         :return: tuple(list of words, list of tags)
         """
-        data = []
         with open(self.data_file, encoding='utf-8') as train_file:
             file = train_file.read().split("\n\n")
-            sentences = [["<s>"] + [word_tag.split("\t")[0] for word_tag in sent.split("\n")
-                                    if len(word_tag.split("\t")) == 2] + ["<s>"] for sent in file if sent != ""]
-            tags = [["BOUNDARY"] + [word_tag.split("\t")[1] for word_tag in sent.split("\n")
-                                    if len(word_tag.split("\t")) == 2] + ["BOUNDARY"] for sent in file if sent != ""]
-            for s, t in zip(sentences, tags):
-                data.append((s, t))
-            self.sentences = sentences
-        return data
+            for sent in file:
+                if sent != "":
+                    words, tags = ["<s>"], ["BOUNDARY"]
+                    for word_tag in sent.split("\n"):
+                        if len(word_tag.split("\t")) == 2:
+                            words.append(word_tag.split("\t")[0])
+                            tags.append(word_tag.split("\t")[1])
+                    words.append("<s>")
+                    tags.append("BOUNDARY")
+                yield words, tags
+
+    def save_weight(self):
+        data = {"parameters": self.weights,
+                "tagset": self.tagset}
+        with open(self.paramfile, "wb") as handle:
+            pickle.dump(data, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
 
 if __name__ == '__main__':
-    crf = CRFTagger("Tiger/train.txt", paramfile="paramfile.pickle")
+    train_file = sys.argv[1]
+    param_file = sys.argv[2]
+    crf = CRFTagger(train_file, param_file)
     crf.fit()
