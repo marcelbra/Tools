@@ -15,9 +15,15 @@ from collections import Counter
 from utils import (add, div, mul, log_sum_exp,
                    sub, dot, create_vec,
                    get_substrings_tag,
-                   get_word_shape,)
+                   get_word_shape,
+                   init_scores,
+                   feature_extraction,
+                   get_context_features,
+                   get_lexical_features)
 from collections import defaultdict
 import re
+from copy import copy
+from tqdm import tqdm
 
 class CRFTagger:
 
@@ -27,119 +33,78 @@ class CRFTagger:
         self.tagset = self.get_tagset()
         self.weights = defaultdict(float)
 
-    def fit(self, learning_rate=1e-5):
+    def fit(self, lr=1e-5):
         for epoch in range(3):
-            for words, tags in self.get_data():
-                for i, word in enumerate(words):
-                    if not i: continue
-                    alphas = self.forward(words)
-                    betas = self.backward(words)
-                    estimated_frequencies = self.get_estimated_feature_values(words, alphas, betas)
-                    observed_frequencies = self.feature_extraction(tags[i-1], tags[i], words, i)
-                    self.weight_update(estimated_frequencies, observed_frequencies, learning_rate)
+            for words, tags in tqdm(self.get_data()):
+                alphas = self.step(words, forward=True)
+                betas = self.step(words, forward=False)
+                estimated = self.get_estimated_frequencies(words, alphas, betas)
+                observed = self.get_observed_frequencies(words, tags)
+                self.weight_update(estimated, observed, lr)
         self.save_weights()
 
-    def weight_update(self, estimated_frequencies, observed_frequencies, learning_rate):
-        for feature, value in estimated_frequencies.items():
-            self.weights[feature] -= value * learning_rate
-        for feature, value in observed_frequencies.items():
-            self.weights[feature] += value * learning_rate
+    def step(self, words, forward):
+        values = init_scores(words, forward, self.tagset)
+        _range, direction = (range(1, len(words)), -1) if forward else (range(len(words) - 1)[::-1], 1)
+        for i in _range:
+            for tag in values[i].keys():
+                for adjacent_tag, adjacent_score in values[i+direction].items():
+                    tags = (adjacent_tag, tag) if forward else (tag, adjacent_tag)
+                    values[i][tag] += math.log(adjacent_score + self.score(*tags, words, i))
+        return values
 
-    def get_estimated_feature_values(self, words, alphas, betas):
-        """
-        Calulates gamma values for the word sequence, given alphas and betas.
-        """
+    def get_estimated_frequencies(self, words, alphas, betas):
         gammas = defaultdict(float)
         for i in range(1, len(words)):
             for tag, beta_score in betas[i].items():
-
                 # Calculate gamma for lexical features
-                lexical_features = self.get_lexical_features(tag, words, i)
+                lexical_features = get_lexical_features(tag, words, i)
                 for feature in lexical_features:
-                    gammas[feature] = math.exp(alphas[i][tag] + betas[i][tag] - alphas[-1]["BOUNDARY"])
-
+                    gammas[feature] = math.exp(alphas[i][tag] + betas[i][tag] - alphas[-1]["<s>"])
                 # Calculate gamma for context features
-                for previous_tag, alpha_score in alphas[i-1].items():
-                    frequencies = self.feature_extraction(previous_tag, tag, words, i)
-                    context_features = self.get_context_features(previous_tag, tag, words, i)
-                    score = math.exp(sum(frequencies[f"{feature}"] * self.weights[feature] for feature in context_features))
+                lex_score = sum(self.weights[f] for f in lexical_features)
+                for previous_tag, alpha_score in alphas[i - 1].items():
+                    context_features = get_context_features(previous_tag, tag, words, i)
+                    context_score = sum(self.weights[f] for f in context_features)
+                    p = math.exp(alpha_score + context_score + lex_score + beta_score - alphas[-1]["<s>"])
                     for feature in context_features:
-                        gammas[feature] = math.exp(alphas[i - 1][tag] + betas[i][previous_tag]
-                                                   + score - alphas[-1]["BOUNDARY"])
+                        gammas[feature] += p
         return gammas
 
-    def forward(self, words):
-        alphas = self.init_scores(words)
-        for i in range(1, len(words)):
-            for tag in self.tagset:
-                for previous_tag, previous_score in alphas[i-1].items():
-                    alphas = self.step(alphas, previous_tag, tag, words, i, previous_score)
-        return alphas
+    def get_observed_frequencies(self, words, tags):
+        observed_frequencies = defaultdict(float)
+        for i, (word, tag) in enumerate(zip(words, tags)):
+            lexical = get_lexical_features(tag, words, i)
+            context = get_context_features(tags[i-1], tag, words, i)
+            for feature in lexical + context:
+                observed_frequencies[feature] += 1
+        return observed_frequencies
 
-    def backward(self, words):
-        betas = self.init_scores(words)
-        for i in range(len(words) - 1)[::-1]:
-            for tag in self.tagset:
-                for next_tag, next_score in betas[i+1].items():
-                    betas = self.step(betas, next_tag, tag, words, i, next_score)
-        return betas
+    def weight_update(self, estimated, observed, lr):
+        for feature, value in estimated.items():
+            self.weights[feature] -= value * lr
+        for feature, value in observed.items():
+            self.weights[feature] += value * lr
 
-    def step(self, values, previous_next_tag, tag, words, i, prev_next_score):
-        feature_count = self.feature_extraction(previous_next_tag, tag, words, i)
-        feature_vector = list(feature_count.values())
-        score = self.get_score(feature_count)
-        score = prev_next_score + dot(feature_vector, score)
-        values[i][tag] = log_sum_exp(values[i][tag], score)
-        return values
-
-    def get_score(self, feat_count):
-        return [self.weights[feat] if feat in self.weights else 0 for feat in feat_count]
-
-    def get_lexical_features(self, tag, words, i):
-        word_tag = words[i], tag
-        word_shape_tag = get_word_shape(words[i]), tag
-        ngrams_tag = get_substrings_tag(tag, words)
-        return [word_tag, word_shape_tag] + ngrams_tag
-
-    def get_context_features(self, prevtag, tag, words, i):
-        prevtag_tag = prevtag, tag
-        prevtag_word_tag = prevtag, tag, words[i]
-        return [prevtag_tag, prevtag_word_tag]
-
-    def feature_extraction(self, prevtag, tag, words, i):
-        lexical = self.get_lexical_features(tag, words, i)
-        context = self.get_context_features(prevtag, tag, words, i)
-        features = lexical + context
-        feature_count = {str(k):v for k,v in Counter(features).items()}
-        return feature_count
-
-    def init_scores(self, words):
-        """Initializer for alpha, beta, gamma and weight scores."""
-        return [{tag: 1 if tag == "BOUNDARY" else 0 for tag in self.tagset} for _ in words]
-
-    def get_tagset(self):  # 54 tags together with BOUNDARY
-        sentences = self.get_data()
-        self.tagset = list(set([re.sub("[|]", '', taglist) for sentence, sent_tags in sentences
-                                for taglist in sent_tags]))
-        return self.tagset
+    def get_tagset(self):
+        all_tags = []
+        for _, tags in self.get_data():
+            all_tags.extend(tags)
+        return list(set(all_tags))
 
     def get_data(self):
-        """
-        Reads data and appends boundary token <s> to start and end of sentence.
-        :return: tuple(list of words, list of tags)
-        """
+        data = []
         with open(self.data_file, encoding='utf-8') as train_file:
             file = train_file.read().split("\n\n")
             for sent in file:
                 if sent != "":
-                    words, tags = ["<s>"], ["BOUNDARY"]
-                    for word_tag in sent.split("\n"):
-                        if len(word_tag.split("\t")) == 2:
-                            words.append(word_tag.split("\t")[0])
-                            tags.append(word_tag.split("\t")[1])
-                    words.append("<s>")
-                    tags.append("BOUNDARY")
-                yield words, tags
+                    word_tag_pairs = [line.split("\t") for line in sent.split("\n")]
+                    words, tags = zip(*word_tag_pairs)
+                    words = [" "] + list(words) + [" "]
+                    tags = ["<s>"] + list(tags) + ["</s>"]
+                data.append((words,tags))
+        return data
+                #yield words, tags
 
     def save_weight(self):
         data = {"parameters": self.weights,
