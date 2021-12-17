@@ -47,28 +47,47 @@ class CRFTagger:
         values = init_scores(words, forward, self.tagset)
         _range, direction = (range(1, len(words)), -1) if forward else (range(len(words) - 1)[::-1], 1)
         for i in _range:
+            #cache = {}
             for tag in values[i].keys():
                 for adjacent_tag, adjacent_score in values[i+direction].items():
                     tags = (adjacent_tag, tag) if forward else (tag, adjacent_tag)
-                    values[i][tag] += math.log(adjacent_score + self.score(*tags, words, i))
+                    #if tags not in cache:
+                    #    cache[tags] = math.log(adjacent_score + self.score(*tags, words, i))
+                    values[i][tag] += math.log(adjacent_score + self.score(*tags, words, i))#cache[tags]
         return values
+
+    def score(self, adjacent_tag, tag, words, i):
+        feature_counts = feature_extraction(adjacent_tag, tag, words, i)
+        score = sum(self.weights[feature] * counts for feature, counts in feature_counts.items())
+        return math.exp(score)
 
     def get_estimated_frequencies(self, words, alphas, betas):
         gammas = defaultdict(float)
         for i in range(1, len(words)):
+            cache = {} #(argument, tag, i)
             for tag, beta_score in betas[i].items():
+
                 # Calculate gamma for lexical features
                 lexical_features = get_lexical_features(tag, words, i)
                 for feature in lexical_features:
                     gammas[feature] = math.exp(alphas[i][tag] + betas[i][tag] - alphas[-1]["<s>"])
+
                 # Calculate gamma for context features
-                lex_score = sum(self.weights[f] for f in lexical_features)
+                lexixal_score = sum(self.weights[f] for f in lexical_features)
                 for previous_tag, alpha_score in alphas[i - 1].items():
-                    context_features = get_context_features(previous_tag, tag, words, i)
-                    context_score = sum(self.weights[f] for f in context_features)
-                    p = math.exp(alpha_score + context_score + lex_score + beta_score - alphas[-1]["<s>"])
-                    for feature in context_features:
+
+                    # Caching
+                    context_features_key = ("context_features", tag, i)
+                    context_score_key = ("context_score", tag, i)
+                    if context_features_key not in cache:
+                        cache[context_features_key] = get_context_features(previous_tag, tag, words, i)
+                        if context_score_key not in cache:
+                            cache[context_score_key] = sum(self.weights[f] for f in cache[context_features_key])
+
+                    p = math.exp(alpha_score + cache[context_score_key] + lexixal_score + beta_score - alphas[-1]["<s>"])
+                    for feature in cache[context_features_key]:
                         gammas[feature] += p
+
         return gammas
 
     def get_observed_frequencies(self, words, tags):
@@ -118,3 +137,4 @@ if __name__ == '__main__':
     param_file = sys.argv[2]
     crf = CRFTagger(train_file, param_file)
     crf.fit()
+
