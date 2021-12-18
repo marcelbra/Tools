@@ -36,13 +36,33 @@ class CRFTagger:
     def fit(self, lr=1e-5):
         for epoch in range(3):
             for words, tags in tqdm(self.get_data()):
-                alphas = self.step(words, forward=True)
-                betas = self.step(words, forward=False)
+                #alphas = self.step(words, forward=True)
+                #betas = self.step(words, forward=False)
+                alphas = self.forward(words)
+                betas = self.backward(words)
+
                 estimated = self.get_estimated_frequencies(words, alphas, betas)
                 observed = self.get_observed_frequencies(words, tags)
                 self.weight_update(estimated, observed, lr)
         self.save_weights()
 
+    def forward(self, words):
+        values = init_scores(words, True, self.tagset)
+        for i in range(1, len(words)):
+            for tag in values[i].keys():
+                for previous_tag, previous_score in values[i-1].items():
+                    values[i][tag] += math.log(previous_score + self.score(previous_tag, tag, words, i))
+        return values
+
+    def backward(self, words):
+        values = init_scores(words, False, self.tagset)
+        for i in range(len(words) - 1)[::-1]:
+            for tag in values[i].keys():
+                for next_tag, next_score in values[i+1].items():
+                    values[i][tag] += math.log(adjacent_score + self.score(tag, adjacent_tag, words, i))#cache[tags]
+        return values
+
+    """
     def step(self, words, forward):
         values = init_scores(words, forward, self.tagset)
         _range, direction = (range(1, len(words)), -1) if forward else (range(len(words) - 1)[::-1], 1)
@@ -55,6 +75,7 @@ class CRFTagger:
                     #    cache[tags] = math.log(adjacent_score + self.score(*tags, words, i))
                     values[i][tag] += math.log(adjacent_score + self.score(*tags, words, i))#cache[tags]
         return values
+    """
 
     def score(self, adjacent_tag, tag, words, i):
         feature_counts = feature_extraction(adjacent_tag, tag, words, i)
