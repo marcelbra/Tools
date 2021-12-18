@@ -59,7 +59,7 @@ class CRFTagger:
         for i in range(len(words) - 1)[::-1]:
             for tag in values[i].keys():
                 for next_tag, next_score in values[i+1].items():
-                    values[i][tag] += math.log(adjacent_score + self.score(tag, adjacent_tag, words, i))#cache[tags]
+                    values[i][tag] += math.log(next_score + self.score(tag, next_tag, words, i))#cache[tags]
         return values
 
     """
