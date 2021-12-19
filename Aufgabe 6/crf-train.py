@@ -24,7 +24,7 @@ from utils import (add, div, mul, log_sum_exp,
                    get_lexical_features)
 from collections import defaultdict
 import re
-from copy import copy
+from copy import copy, deepcopy
 from tqdm import tqdm
 
 
@@ -53,36 +53,22 @@ class CRFTagger:
             self.save_weights()
 
     def viterbi(self, words, scores):
-        reversed_tags = []
+        tags = []
         viterbi_scores = [{} for _ in range(len(words))]
-        best_prev_tag = [{} for _ in range(len(words))]
-        end_tag = "</s>"
-
+        best_prev_tag = deepcopy(viterbi_scores)
         viterbi_scores[0] = {"<s>": 0}
-
         for i in range(1, len(words)):
             for tag in self.tagset:
-                #lexical_features = get_lexical_features(tag, words, i)
-                #lex_counts = Counter(lexical_features)
-                #lexical_score = sum(self.weights[feature] * counts for feature, counts in lex_counts.items())
                 for previous_tag, previous_score in viterbi_scores[i - 1].items():
                     score = math.log(previous_score + scores[(previous_tag, tag, i)])
-                    #context_features = get_context_features(prev_tag, tag, words, i)
-                    #context_count = Counter(context_features)
-                    #context_score = sum(self.weights[feature] * counts for feature, counts in context_count.items())
-
                     if tag not in viterbi_scores[i] or score > viterbi_scores[i][tag]:
                         viterbi_scores[i][tag] = score
                         best_prev_tag[i][tag] = previous_tag
-
-        reversed_tags.append(end_tag)
+        tags.append("</s>")
         for i in range(len(words) - 1, 0, -1):
             best_tag = best_prev_tag[i][tag]
-            reversed_tags.append(best_tag)
-
-        tag_sequence = reversed_tags[::-1]
-
-        return tag_sequence
+            tags.append(best_tag)
+        return tags[::-1]
 
     def forward(self, words, scores):
         values = init_scores(words, True, self.tagset)
