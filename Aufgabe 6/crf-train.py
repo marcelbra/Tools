@@ -9,14 +9,16 @@ Sinem Kühlewind (geb. Demiraslan)
 """
 
 import os
+import pickle
 import sys
 import math
 from collections import Counter
 from utils import (add, div, mul, log_sum_exp,
-                   sub, dot, create_vec,
+                   sub, dot, sign, create_vec,
                    get_substrings_tag,
                    get_word_shape,
                    init_scores,
+                   sign,
                    feature_extraction,
                    get_context_features,
                    get_lexical_features)
@@ -24,6 +26,7 @@ from collections import defaultdict
 import re
 from copy import copy
 from tqdm import tqdm
+
 
 class CRFTagger:
 
@@ -33,24 +36,61 @@ class CRFTagger:
         self.tagset = self.get_tagset()
         self.weights = defaultdict(float)
 
-    def fit(self, lr=1e-5):
+    def fit(self, lr=1e-5, mu=1e-5):
         for epoch in range(3):
             for words, tags in tqdm(self.get_data()):
-                #alphas = self.step(words, forward=True)
-                #betas = self.step(words, forward=False)
+                # alphas = self.step(words, forward=True)
+                # betas = self.step(words, forward=False)
                 alphas = self.forward(words)
                 betas = self.backward(words)
 
                 estimated = self.get_estimated_frequencies(words, alphas, betas)
                 observed = self.get_observed_frequencies(words, tags)
-                self.weight_update(estimated, observed, lr)
+
+                delta = mul(create_vec(mu, len(self.weights)), sign(self.weights))
+
+                self.weight_update(estimated, observed, lr, delta)
+
         self.save_weights()
+
+    def viterbi(self, words):
+        reversed_tags = []
+        viterbi_scores = [{} for _ in range(len(words))]
+        best_prev_tag = [{} for _ in range(len(words))]
+        init_score = {"<s>": 0}
+        end_tag = "</s>"
+
+        viterbi_scores[0] = init_score
+
+        for i in range(1, len(words)):
+            for tag in self.tagset:
+                #lexical_features = get_lexical_features(tag, words, i)
+                #lex_counts = Counter(lexical_features)
+                #lexical_score = sum(self.weights[feature] * counts for feature, counts in lex_counts.items())
+                for previous_tag, previous_score in viterbi_scores[i - 1].items():
+                    score = math.log(previous_score + self.score(previous_tag, tag, words, i))
+                    #context_features = get_context_features(prev_tag, tag, words, i)
+                    #context_count = Counter(context_features)
+                    #context_score = sum(self.weights[feature] * counts for feature, counts in context_count.items())
+
+                    if tag not in viterbi_scores[i] or score > viterbi_scores[i][tag]:
+                        viterbi_scores[i][tag] = score
+                        best_prev_tag[i][tag] = previous_tag
+
+        reversed_tags.append(end_tag)
+        for i in range(len(words) - 1, 0, -1):
+            best_tag = best_prev_tag[i][tag]
+            reversed_tags.append(best_tag)
+
+        tag_sequence = reversed_tags[::-1]
+
+        return tag_sequence
 
     def forward(self, words):
         values = init_scores(words, True, self.tagset)
         for i in range(1, len(words)):
             for tag in values[i].keys():
-                for previous_tag, previous_score in values[i-1].items():
+                for previous_tag, previous_score in values[i - 1].items():
                     values[i][tag] += math.log(previous_score + self.score(previous_tag, tag, words, i))
         return values
 
@@ -58,8 +98,8 @@ class CRFTagger:
         values = init_scores(words, False, self.tagset)
         for i in range(len(words) - 1)[::-1]:
             for tag in values[i].keys():
-                for next_tag, next_score in values[i+1].items():
-                    values[i][tag] += math.log(next_score + self.score(tag, next_tag, words, i))#cache[tags]
+                for next_tag, next_score in values[i + 1].items():
+                    values[i][tag] += math.log(next_score + self.score(tag, next_tag, words, i))  # cache[tags]
         return values
 
     """
@@ -85,7 +125,7 @@ class CRFTagger:
     def get_estimated_frequencies(self, words, alphas, betas):
         gammas = defaultdict(float)
         for i in range(1, len(words)):
-            cache = {} #(argument, tag, i)
+            cache = {}  # (argument, tag, i)
             for tag, beta_score in betas[i].items():
 
                 # Calculate gamma for lexical features
@@ -105,7 +145,8 @@ class CRFTagger:
                         if context_score_key not in cache:
                             cache[context_score_key] = sum(self.weights[f] for f in cache[context_features_key])
 
-                    p = math.exp(alpha_score + cache[context_score_key] + lexixal_score + beta_score - alphas[-1]["<s>"])
+                    p = math.exp(
+                        alpha_score + cache[context_score_key] + lexixal_score + beta_score - alphas[-1]["<s>"])
                     for feature in cache[context_features_key]:
                         gammas[feature] += p
 
@@ -115,12 +156,12 @@ class CRFTagger:
         observed_frequencies = defaultdict(float)
         for i, (word, tag) in enumerate(zip(words, tags)):
             lexical = get_lexical_features(tag, words, i)
-            context = get_context_features(tags[i-1], tag, words, i)
+            context = get_context_features(tags[i - 1], tag, words, i)
             for feature in lexical + context:
                 observed_frequencies[feature] += 1
         return observed_frequencies
 
-    def weight_update(self, estimated, observed, lr):
+    def weight_update(self, estimated, observed, lr, delta):
         for feature, value in estimated.items():
             self.weights[feature] -= value * lr
         for feature, value in observed.items():
@@ -142,9 +183,9 @@ class CRFTagger:
                     words, tags = zip(*word_tag_pairs)
                     words = [" "] + list(words) + [" "]
                     tags = ["<s>"] + list(tags) + ["</s>"]
-                data.append((words,tags))
+                data.append((words, tags))
         return data
-                #yield words, tags
+        # yield words, tags
 
     def save_weight(self):
         data = {"parameters": self.weights,
@@ -158,4 +199,3 @@ if __name__ == '__main__':
     param_file = sys.argv[2]
     crf = CRFTagger(train_file, param_file)
     crf.fit()
-
