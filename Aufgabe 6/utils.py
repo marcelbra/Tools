@@ -96,7 +96,7 @@ def get_context_features(prevtag, tag, words, i):
 
 def feature_extraction(adjacent_tag, tag, words, i):
     lexical = get_lexical_features(tag, words, i)
-    # when we are in backward adjacent_tag will be tag and vice versa
+    # when we are in backward, adjacent_tag will be tag and vice versa
     context = get_context_features(adjacent_tag, tag, words, i)
     features = lexical + context
     feature_count = {str(k): v for k, v in Counter(features).items()}
