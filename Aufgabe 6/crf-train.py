@@ -37,20 +37,17 @@ class CRFTagger:
         self.weights = defaultdict(float)
 
     def fit(self, lr=1e-5, mu=1e-5):
-        data = self.get_data()[:3]
+        data = self.get_data()
         for epoch in range(2):      # TODO Data Slicing raus, Epochen auf 3-5 ändern
             for words, tags in tqdm(data):
                 # alphas = self.step(words, forward=True)
                 # betas = self.step(words, forward=False)
-                alphas = self.forward(words)
-                betas = self.backward(words)
-
+                score = self.get_score(words)
+                alphas = self.forward(words, score)
+                betas = self.backward(words, score)
                 estimated = self.get_estimated_frequencies(words, alphas, betas)
                 observed = self.get_observed_frequencies(words, tags)
-
-                delta = mul(create_vec(mu, len(self.weights)), sign(self.weights))
-
-                self.weight_update(estimated, observed, lr, delta)
+                self.weight_update(estimated, observed, lr, mu)
 
         self.save_weights()
 
@@ -87,8 +84,9 @@ class CRFTagger:
 
         return tag_sequence
 
-    def forward(self, words, threshold=math.log(0.001)):
+    def forward(self, words, scores):
         values = init_scores(words, True, self.tagset)
+        threshold = math.log(0.001)
         max_lex_score = 0
         for i in range(1, len(words)):
             for tag in values[i].keys():
@@ -103,15 +101,29 @@ class CRFTagger:
                         # TODO hier bei der Berechnung des scores, lex Score nicht erneut ausrechnen \
                         # TODO sondern aus dem Cache holen -> Funktion score() bearbeiten -> greift auf feature_extraction() zurück
                         # TODO -> EVTL: Fallunterscheidung in feature_extraction, um nur die lexikalischen Features zu extrahieren
-                        values[i][tag] += math.log(previous_score + self.score(previous_tag, tag, words, i))
+                        values[i][tag] += math.log(previous_score + scores[(tag, previous_tag,i)])#self.score(previous_tag, tag, words, i))
         return values
 
-    def backward(self, words):
+    def get_score(self, words):
+        features_cache = {}
+        score_cache = {}
+        for i in range(1, len(words)):
+            for tag in self.tagset:
+                for other_tag in self.tagset:
+                    key = (tag, other_tag, i)
+                    if key not in features_cache:
+                        features_cache[key] = feature_extraction(other_tag, tag, words, i)
+                    if key not in score_cache:
+                        score_cache[key] = self._score(features_cache[key])
+        return score_cache
+
+
+    def backward(self, words, scores):
         values = init_scores(words, False, self.tagset)
-        for i in range(len(words) - 1)[::-1]:
+        for i in range(len(words)-1, 0, -1):
             for tag in values[i].keys():
-                for next_tag, next_score in values[i + 1].items():
-                    values[i][tag] += math.log(next_score + self.score(tag, next_tag, words, i))  # cache[tags]
+                for next_tag, next_score in values[i].items():
+                    values[i][tag] += math.log(next_score + scores[(next_tag, tag,i)])# self.score(tag, next_tag, words, i))  # cache[tags]
         return values
 
     """
@@ -131,6 +143,10 @@ class CRFTagger:
 
     def score(self, adjacent_tag, tag, words, i):
         feature_counts = feature_extraction(adjacent_tag, tag, words, i)
+        score = sum(self.weights[feature] * counts for feature, counts in feature_counts.items())
+        return math.exp(score)
+
+    def _score(self, feature_counts):
         score = sum(self.weights[feature] * counts for feature, counts in feature_counts.items())
         return math.exp(score)
 
@@ -173,25 +189,26 @@ class CRFTagger:
                 observed_frequencies[feature] += 1
         return observed_frequencies
 
-    def weight_update(self, estimated, observed, lr, delta):
+    """
+    def weight_update(self, estimated, observed, lr):
         for feature, value in estimated.items():
-            #Referenz Notizen: Aufzeichnung ab ca. 3:15
-            #Wenn Vorzeichen des Gewichts positiv: Gewicht - Delta
-            #Wenn Vorzeichen des Gewichts negativ: Gewicht + Delta
-            if value < 0:
-                self.weights[feature] -= (value+delta) * lr
-            elif value > 0:
-                self.weights[feature] -= (value-delta) * lr
-                # Wenn sich durch Subtraktion das Vorzeichen ändert, können wir den Key löschen
-                if self.weights[feature] < 0:
-                    self.weights.pop(feature)
+            self.weights[feature] -= value * lr
         for feature, value in observed.items():
-            if value < 0:
-                self.weights[feature] -= (value + delta) * lr
-            elif value > 0:
-                self.weights[feature] -= (value - delta) * lr
-                if self.weights[feature] < 0:
-                    self.weights.pop(feature)
+            self.weights[feature] += value * lr
+            
+    """
+
+    def weight_update(self, estimated, observed, lr, mu):
+        estimated.update(observed)
+        for feature, value in estimated.items():
+            weight = self.weights[feature]
+            weight_sign = math.copysign(1, weight)
+            delta = math.copysign(mu, weight)
+            self.weights[feature] -= (value + delta) * lr
+            new_weight_sign = math.copysign(1, self.weights[feature])
+            if weight_sign != new_weight_sign:
+                del self.weights[feature]
+
 
     def get_tagset(self):
         all_tags = []
