@@ -37,8 +37,9 @@ class CRFTagger:
         self.weights = defaultdict(float)
 
     def fit(self, lr=1e-5, mu=1e-5):
-        for epoch in range(3):
-            for words, tags in tqdm(self.get_data()):
+        data = self.get_data()[:3]
+        for epoch in range(2):      # TODO Data Slicing raus, Epochen auf 3-5 ändern
+            for words, tags in tqdm(data):
                 # alphas = self.step(words, forward=True)
                 # betas = self.step(words, forward=False)
                 alphas = self.forward(words)
@@ -86,12 +87,23 @@ class CRFTagger:
 
         return tag_sequence
 
-    def forward(self, words):
+    def forward(self, words, threshold=math.log(0.001)):
         values = init_scores(words, True, self.tagset)
+        max_lex_score = 0
         for i in range(1, len(words)):
             for tag in values[i].keys():
+                # First compute lexical scores to find out maximum lexical score.
+                # Maximum lexical score serves as threshold to iterate over smaller number of tags.
+                lexical_features = Counter(get_lexical_features(tag, words, i))
+                current_lex_score = sum(self.weights[feature] * counts for feature, counts in lexical_features.items())
+                current_lex_score = max_lex_score if current_lex_score > max_lex_score else current_lex_score
+                # TODO lexikalischen Scores im Cache speichern
                 for previous_tag, previous_score in values[i - 1].items():
-                    values[i][tag] += math.log(previous_score + self.score(previous_tag, tag, words, i))
+                    if current_lex_score > (max_lex_score + threshold):
+                        # TODO hier bei der Berechnung des scores, lex Score nicht erneut ausrechnen \
+                        # TODO sondern aus dem Cache holen -> Funktion score() bearbeiten -> greift auf feature_extraction() zurück
+                        # TODO -> EVTL: Fallunterscheidung in feature_extraction, um nur die lexikalischen Features zu extrahieren
+                        values[i][tag] += math.log(previous_score + self.score(previous_tag, tag, words, i))
         return values
 
     def backward(self, words):
@@ -187,7 +199,7 @@ class CRFTagger:
         return data
         # yield words, tags
 
-    def save_weight(self):
+    def save_weights(self):
         data = {"parameters": self.weights,
                 "tagset": self.tagset}
         with open(self.paramfile, "wb") as handle:
@@ -195,7 +207,7 @@ class CRFTagger:
 
 
 if __name__ == '__main__':
-    train_file = sys.argv[1]
-    param_file = sys.argv[2]
+    train_file = r"Tiger/train.txt"#sys.argv[1]       # TODO Argumente durch sys.argvs ersetzen
+    param_file = "paramfile.pickle"#.argv[2]
     crf = CRFTagger(train_file, param_file)
     crf.fit()
