@@ -36,19 +36,26 @@ class CRFTagger:
         self.tagset = self.get_tagset()
         self.weights = defaultdict(float)
 
-    def fit(self, lr=1e-5, mu=1e-5):
+    def fit(self,lr=1e-5, mu=1e-5):
         data = self.get_data()
-        for epoch in range(2):      # TODO Data Slicing raus, Epochen auf 3-5 ändern
+        for epoch in range(2):
             for words, tags in tqdm(data):
                 # alphas = self.step(words, forward=True)
                 # betas = self.step(words, forward=False)
-                scores = self.get_score(words)
-                alphas = self.forward(words, scores)
-                betas = self.backward(words, scores)
+
+                # precompute values
+                lexical_scores = self.get_lexical_scores(words)
+                tags = self.get_tags(words, lexical_scores)
+                scores = self.get_context_scores(scores, tags)
+                scores.update(lexical_scores)
+
+                alphas = self.forward(words, scores, tags)
+                betas = self.backward(words, scores, tags)
                 estimated = self.get_estimated_frequencies(words, alphas, betas)
                 observed = self.get_observed_frequencies(words, tags)
                 self.weight_update(estimated, observed, lr, mu)
-                self.viterbi(words, scores)
+
+                #self.viterbi(words, scores)
 
             self.save_weights()
 
@@ -70,7 +77,7 @@ class CRFTagger:
             tags.append(best_tag)
         return tags[::-1]
 
-    def forward(self, words, scores):
+    def forward(self, words, scores, tags=None):
         values = init_scores(words, True, self.tagset)
         threshold = math.log(0.001)
         max_lex_score = 0
@@ -93,7 +100,7 @@ class CRFTagger:
                     values[i][tag] += math.log(previous_score + scores[(tag, previous_tag,i)])
         return values
 
-    def backward(self, words, scores):
+    def backward(self, words, scores, tags=None):
         values = init_scores(words, False, self.tagset)
         for i in range(len(words)-1, 0, -1):
             for tag in values[i].keys():
@@ -101,15 +108,34 @@ class CRFTagger:
                     values[i][tag] += math.log(next_score + scores[(next_tag, tag,i)])#
         return values
 
-    def get_score(self, words):
-        scores_cache = {}
+    def get_lexical_scores(self, words):
+        """Given the words computes all lexical scores and stores
+        them in dict as: {(tag, i): lexical_score(tag,i), ... }"""
+        pass
+
+    def get_context_scores(self, words, tags):
+        cache = {}
         for i in range(1, len(words)):
             for tag in self.tagset:
                 for other_tag in self.tagset:
                     key = (tag, other_tag, i)
-                    if key not in scores_cache:
+                    if key not in cache:
                         scores_cache[key] = self.score(other_tag, tag, words, i)
-        return scores_cache
+        return cache
+
+    def get_tags(self, words, lexical_scores):
+        """Given the lexical scores find out which tag sequence is the best."""
+        pass
+        """
+        tags = [['<s>']]
+        for i in range(1, len(words)-1):
+            tags = copy(self.tagset)
+            # TODO: Hier statt die besten 10, die auswählen, die die Bedingungen erfüllen
+            tags.sort(key=lambda t: score[(words[i], t)], reverse=True)
+            tags.append(tags[:10])
+        tags.append('</s>')
+        return tags
+        """
 
     """
     def step(self, words, forward):
@@ -186,7 +212,7 @@ class CRFTagger:
             self.weights[feature] -= (value + delta) * lr
             new_weight_sign = math.copysign(1, self.weights[feature])
             if weight_sign != new_weight_sign:
-                del self.weights[feature]
+                self.weights[feature] = 0
 
     def get_tagset(self):
         all_tags = []
