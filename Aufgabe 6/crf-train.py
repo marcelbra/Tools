@@ -163,9 +163,23 @@ class CRFTagger:
 
     def weight_update(self, estimated, observed, lr, delta):
         for feature, value in estimated.items():
-            self.weights[feature] -= value * lr
+            #Referenz Notizen: Aufzeichnung ab ca. 3:15
+            #Wenn Vorzeichen des Gewichts positiv: Gewicht - Delta
+            #Wenn Vorzeichen des Gewichts negativ: Gewicht + Delta
+            if value < 0:
+                self.weights[feature] -= (value+delta) * lr
+            elif value > 0:
+                self.weights[feature] -= (value-delta) * lr
+                # Wenn sich durch Subtraktion das Vorzeichen ändert, können wir den Key löschen
+                if self.weights[feature] < 0:
+                    self.weights.pop(feature)
         for feature, value in observed.items():
-            self.weights[feature] += value * lr
+            if value < 0:
+                self.weights[feature] -= (value + delta) * lr
+            elif value > 0:
+                self.weights[feature] -= (value - delta) * lr
+                if self.weights[feature] < 0:
+                    self.weights.pop(feature)
 
     def get_tagset(self):
         all_tags = []
