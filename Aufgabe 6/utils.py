@@ -64,7 +64,7 @@ def feature_extraction(adjacent_tag, tag, words, i, mode=None):
         features = get_lexical_features(tag, words, i)
     elif mode=="context":
         features = get_context_features(adjacent_tag, tag, words, i)
-    else:
+    elif mode == "lexical+context":
         lexical = get_lexical_features(tag, words, i)
         context = get_context_features(adjacent_tag, tag, words, i)
         features = lexical + context
