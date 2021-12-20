@@ -40,7 +40,7 @@ class CRFTagger:
         for epoch in range(2):
             for words, tags in tqdm(data):
 
-                # precompute values
+                # precompute valuess
                 lexical_features, lexical_scores = self.get_lexical(words)
                 tags = self.get_tags(words, lexical_scores)
                 context_features, scores = self.get_context(words, tags)

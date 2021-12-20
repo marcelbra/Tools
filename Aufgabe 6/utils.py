@@ -71,7 +71,7 @@ def feature_extraction(adjacent_tag, tag, words, i, mode=None):
     return {k: v for k, v in Counter(features).items()}
 
 def get_lexical_features(tag, words, i):
-    word_tag = "WT", words[i], tag
+    word_tag = "WT", words[i], tag #
     word_shape_tag = "ShT", get_word_shape(words[i]), tag
     ngrams_tag = get_substrings_tag(tag, words[i])
     return [word_tag, word_shape_tag] + ngrams_tag
