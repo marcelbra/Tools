@@ -18,7 +18,6 @@ from utils import (add, div, mul, log_sum_exp,
                    get_substrings_tag,
                    get_word_shape,
                    init_scores,
-                   sign,
                    feature_extraction,
                    get_context_features,
                    get_lexical_features)
