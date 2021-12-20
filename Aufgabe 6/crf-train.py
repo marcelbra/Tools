@@ -14,7 +14,7 @@ import sys
 import math
 from collections import Counter
 from utils import (add, div, mul, log_sum_exp,
-                   sub, dot, sign, create_vec,
+                   sub, dot, create_vec,
                    get_substrings_tag,
                    get_word_shape,
                    init_scores,
@@ -43,9 +43,9 @@ class CRFTagger:
                 # betas = self.step(words, forward=False)
 
                 # precompute values
-                lexical_scores = self.get_lexical_scores(words)
-                tags = self.get_tags(words, lexical_scores)
-                scores = self.get_context_scores(scores, tags)
+                lexical_scores = self.get_lexical_scores(words) #{(word, tag):score}
+                tags = self.get_tags(lexical_scores, words)
+                scores = self.get_context_scores(words, tags)
                 scores.update(lexical_scores)
 
                 alphas = self.forward(words, scores, tags)
@@ -80,34 +80,11 @@ class CRFTagger:
 
         return tags[::-1]
 
-
-
-
-
-
-
-
-
     def forward(self, words, scores, tags=None):
         values = init_scores(words, True, self.tagset)
-        threshold = math.log(0.001)
-        max_lex_score = 0
         for i in range(1, len(words)):
             for tag in values[i].keys():
-                """
-                # First compute lexical scores to find out maximum lexical score.
-                # Maximum lexical score serves as threshold to iterate over smaller number of tags.
-                lexical_features = Counter(get_lexical_features(tag, words, i))
-                current_lex_score = sum(self.weights[feature] * counts for feature, counts in lexical_features.items())
-                current_lex_score = max_lex_score if current_lex_score > max_lex_score else current_lex_score
-                """
-                # TODO lexikalischen Scores im Cache speichern
                 for previous_tag, previous_score in values[i - 1].items():
-                    """if current_lex_score > (max_lex_score + threshold):
-                        # TODO hier bei der Berechnung des scores, lex Score nicht erneut ausrechnen \
-                        # TODO sondern aus dem Cache holen -> Funktion score() bearbeiten -> greift auf feature_extraction() zurück
-                        # TODO -> EVTL: Fallunterscheidung in feature_extraction, um nur die lexikalischen Features zu extrahieren
-                    """
                     values[i][tag] += math.log(previous_score + scores[(tag, previous_tag,i)])
         return values
 
@@ -120,33 +97,39 @@ class CRFTagger:
         return values
 
     def get_lexical_scores(self, words):
-        """Given the words computes all lexical scores and stores
-        them in dict as: {(tag, i): lexical_score(tag,i), ... }"""
-        pass
+        """
+        Given words, compute all lexical scores of tags and store them in a dict as
+        {(word, tag): score, ...}
+        """
+        wordtag_to_lexical_score = dict()
+        for i in range(len(words)):
+            for tag in self.tagset:
+                lexical_features = get_lexical_features(tag, words, i)
+                wordtag_to_lexical_score[(words[i], tag)] = sum(self.weights[f] for f in lexical_features)
+        return wordtag_to_lexical_score
 
     def get_context_scores(self, words, tags):
         cache = {}
         for i in range(1, len(words)):
-            for tag in self.tagset:
-                for other_tag in self.tagset:
+            for tag in tags:
+                for other_tag in tags:
                     key = (tag, other_tag, i)
                     if key not in cache:
-                        self.scores_cache[key] = self.score(other_tag, tag, words, i)
+                        cache[key] = self.score(other_tag, tag, words, i)
         return cache
 
-    def get_tags(self, words, lexical_scores):
+    def get_tags(self, words, threshold=math.log(0.001)):
         """Given the lexical scores find out which tag sequence is the best."""
-        pass
-        """
-        tags = [['<s>']]
+        lexical_scores = self.get_lexical_scores(words)
+        sorted_lexscore_dict = dict(sorted(lexical_scores.items(), key=lambda x: x[1], reverse=True))
+        max_lex_score = sorted_lexscore_dict[0][1]
+        tags_copy = self.tagset.copy()
         for i in range(1, len(words)-1):
-            tags = copy(self.tagset)
-            # TODO: Hier statt die besten 10, die auswählen, die die Bedingungen erfüllen
-            tags.sort(key=lambda t: score[(words[i], t)], reverse=True)
-            tags.append(tags[:10])
-        tags.append('</s>')
-        return tags
-        """
+            for t in tags_copy:
+                if (sorted_lexscore_dict[(words[i], t)] + threshold < max_lex_score):
+                    tags_copy.remove(t)
+        return [["<s>"]] + tags_copy + [["</s>"]]
+
 
     """
     def step(self, words, forward):
