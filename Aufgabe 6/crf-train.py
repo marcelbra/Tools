@@ -68,6 +68,8 @@ class CRFTagger:
             for tag in self.tagset:
                 for previous_tag, previous_score in viterbi_scores[i - 1].items():
                     score = math.log(previous_score + scores[(previous_tag, tag, i)])
+                    #TODO-NS: Stimmt das "oder"? Warum sollten wir ein Tag an der Stelle i überschreiben, nur weil es
+                    #TODO: nicht im Dictionary steht? Der Score sollte doch immer entscheiden?
                     if tag not in viterbi_scores[i] or score > viterbi_scores[i][tag]:
                         viterbi_scores[i][tag] = score
                         best_prev_tag[i][tag] = previous_tag
@@ -120,7 +122,7 @@ class CRFTagger:
                 for other_tag in self.tagset:
                     key = (tag, other_tag, i)
                     if key not in cache:
-                        scores_cache[key] = self.score(other_tag, tag, words, i)
+                        self.scores_cache[key] = self.score(other_tag, tag, words, i)
         return cache
 
     def get_tags(self, words, lexical_scores):
@@ -208,7 +210,9 @@ class CRFTagger:
         for feature, value in (list(estimated.items()) + list(observed.items())):
             weight = self.weights[feature]
             weight_sign = math.copysign(1, weight)
+            #TODO: Müsste hier nicht weight_sign statt weight genommen werden?
             delta = math.copysign(mu, weight)
+            #TODO: Wo ist die Unterscheidung ob wir delta subtrahieren oder addieren je nach Vorzeichen des Gewichts?
             self.weights[feature] -= (value + delta) * lr
             new_weight_sign = math.copysign(1, self.weights[feature])
             if weight_sign != new_weight_sign:
