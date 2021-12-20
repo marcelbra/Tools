@@ -39,46 +39,23 @@ class CRFTagger:
         data = self.get_data()
         for epoch in range(2):
             for words, tags in tqdm(data):
-                # alphas = self.step(words, forward=True)
-                # betas = self.step(words, forward=False)
 
                 # precompute values
-                lexical_scores = self.get_lexical_scores(words) #{(word, tag):score}
-                tags = self.get_tags(lexical_scores, words)
-                scores = self.get_context_scores(words, tags)
+                lexical_features, lexical_scores = self.get_lexical(words)
+                tags = self.get_tags(words, lexical_scores)
+                context_features, scores = self.get_context(words, tags)
                 scores.update(lexical_scores)
+                features = {"lexical": lexical_features,
+                            "context": context_features}
 
                 alphas = self.forward(words, scores, tags)
                 betas = self.backward(words, scores, tags)
-                estimated = self.get_estimated_frequencies(words, alphas, betas)
-                observed = self.get_observed_frequencies(words, tags)
+                estimated = self.get_estimated_frequencies(words, alphas, betas, scores, features)
+                observed = self.get_observed_frequencies(words, tags, scores, features)
                 self.weight_update(estimated, observed, lr, mu)
-
                 #self.viterbi(words, scores)
 
             self.save_weights()
-
-    def viterbi(self, words, scores):
-        tags = []
-        viterbi_scores = [{} for _ in range(len(words))]
-        best_prev_tag = deepcopy(viterbi_scores)
-        viterbi_scores[0] = {"<s>": 0}
-        for i in range(1, len(words)):
-            for tag in self.tagset:
-                for previous_tag, previous_score in viterbi_scores[i - 1].items():
-                    score = math.log(previous_score + scores[(previous_tag, tag, i)])
-                    if tag not in viterbi_scores[i]:
-                        viterbi_scores[i][tag] = score
-                        best_prev_tag[i][tag] = previous_tag
-                    elif tag in viterbi_scores[i] and score > viterbi_scores[i][tag]:
-                        viterbi_scores[i][tag] = score
-                        best_prev_tag[i][tag] = previous_tag
-
-        tags.append("</s>")
-        for i in range(len(words)-1, 0, -1):
-            tags.append(best_prev_tag[i][tag])
-
-        return tags[::-1]
 
     def forward(self, words, scores, tags=None):
         values = init_scores(words, True, self.tagset)
@@ -96,107 +73,99 @@ class CRFTagger:
                     values[i][tag] += math.log(next_score + scores[(next_tag, tag,i)])#
         return values
 
-    def get_lexical_scores(self, words):
-        """
-        Given words, compute all lexical scores of tags and store them in a dict as
-        {(word, tag): score, ...}
-        """
-        wordtag_to_lexical_score = dict()
-        for i in range(len(words)):
-            for tag in self.tagset:
-                lexical_features = get_lexical_features(tag, words, i)
-                wordtag_to_lexical_score[(words[i], tag)] = sum(self.weights[f] for f in lexical_features)
-        return wordtag_to_lexical_score
-
-    def get_context_scores(self, words, tags):
-        cache = {}
+    def viterbi(self, words, scores):
+        viterbi_scores = [{} for _ in range(len(words))]
+        best_prev_tag = deepcopy(viterbi_scores)
+        viterbi_scores[0] = {"<s>": 0}
         for i in range(1, len(words)):
-            for tag in tags:
-                for other_tag in tags:
-                    key = (tag, other_tag, i)
-                    if key not in cache:
-                        cache[key] = self.score(other_tag, tag, words, i)
-        return cache
+            for tag in self.tagset:
+                for previous_tag, previous_score in viterbi_scores[i - 1].items():
+                    score = math.log(previous_score + scores[(previous_tag, tag, i)])
+                    if tag not in viterbi_scores[i]:
+                        viterbi_scores[i][tag] = score
+                        best_prev_tag[i][tag] = previous_tag
+                    elif tag in viterbi_scores[i] and score > viterbi_scores[i][tag]:
+                        viterbi_scores[i][tag] = score
+                        best_prev_tag[i][tag] = previous_tag
 
-    def get_tags(self, words, threshold=math.log(0.001)):
-        """Given the lexical scores find out which tag sequence is the best."""
-        lexical_scores = self.get_lexical_scores(words)
-        sorted_lexscore_dict = dict(sorted(lexical_scores.items(), key=lambda x: x[1], reverse=True))
-        max_lex_score = sorted_lexscore_dict[0][1]
-        tags_copy = self.tagset.copy()
-        for i in range(1, len(words)-1):
-            for t in tags_copy:
-                if (sorted_lexscore_dict[(words[i], t)] + threshold < max_lex_score):
-                    tags_copy.remove(t)
-        return [["<s>"]] + tags_copy + [["</s>"]]
+        tags = ["</s>"]
+        tags += [best_prev_tag[i][tag] for i in range(len(words)-1, 0, -1)]
 
+        return tags[::-1]
 
-    """
-    def step(self, words, forward):
-        values = init_scores(words, forward, self.tagset)
-        _range, direction = (range(1, len(words)), -1) if forward else (range(len(words) - 1)[::-1], 1)
-        for i in _range:
-            #cache = {}
-            for tag in values[i].keys():
-                for adjacent_tag, adjacent_score in values[i+direction].items():
-                    tags = (adjacent_tag, tag) if forward else (tag, adjacent_tag)
-                    #if tags not in cache:
-                    #    cache[tags] = math.log(adjacent_score + self.score(*tags, words, i))
-                    values[i][tag] += math.log(adjacent_score + self.score(*tags, words, i))#cache[tags]
-        return values
-    """
+    def score(self, adjacent_tag, tag, words, i, mode):
+        features = feature_extraction(adjacent_tag, tag, words, i, mode)
+        score = math.exp(sum(self.weights[feature] * counts for feature, counts in features.items()))
+        return features, score
 
-    def score(self, adjacent_tag, tag, words, i):
-        feature_counts = feature_extraction(adjacent_tag, tag, words, i)
-        score = sum(self.weights[feature] * counts for feature, counts in feature_counts.items())
-        return math.exp(score)
-
-    def get_estimated_frequencies(self, words, alphas, betas):
+    def get_estimated_frequencies(self, words, alphas, betas, scores, features):
         gammas = defaultdict(float)
         for i in range(1, len(words)):
-            cache = {}  # (argument, tag, i)
             for tag, beta_score in betas[i].items():
 
                 # Calculate gamma for lexical features
-                lexical_features = get_lexical_features(tag, words, i)
-                for feature in lexical_features:
-                    gammas[feature] = math.exp(alphas[i][tag] + betas[i][tag] - alphas[-1]["<s>"])
+                lexical_key = (tag,i)
+                lexical_features = features["lexical"][lexical_key]
+                lexixal_score = scores[lexical_key]
+                for feature in lexical_features.keys():
+                    gammas[feature] = math.exp(alphas[i][tag] + betas[i][tag] - alphas[-1]["<s>"]) # TODO: Müsste ["<s>"] = ["</s>"] sein?
 
                 # Calculate gamma for context features
-                lexixal_score = sum(self.weights[f] for f in lexical_features)
-                for previous_tag, alpha_score in alphas[i - 1].items():
-
-                    # Caching
-                    context_features_key = ("context_features", tag, i)
-                    context_score_key = ("context_score", tag, i)
-                    if context_features_key not in cache:
-                        cache[context_features_key] = get_context_features(previous_tag, tag, words, i)
-                        if context_score_key not in cache:
-                            cache[context_score_key] = sum(self.weights[f] for f in cache[context_features_key])
-
-                    p = math.exp(
-                        alpha_score + cache[context_score_key] + lexixal_score + beta_score - alphas[-1]["<s>"])
-                    for feature in cache[context_features_key]:
+                for previous_tag, alpha_score in alphas[i-1].items():
+                    context_key = (previous_tag,tag,i)
+                    context_features = features["context"][context_key]
+                    context_score = scores[context_key]
+                    p = math.exp(alpha_score + context_score + lexixal_score + beta_score - alphas[-1]["<s>"])
+                    for feature in context_features:
                         gammas[feature] += p
 
         return gammas
 
-    def get_observed_frequencies(self, words, tags):
+    def get_observed_frequencies(self, words, tags, scores, features):
         observed_frequencies = defaultdict(float)
         for i, (word, tag) in enumerate(zip(words, tags)):
-            lexical = get_lexical_features(tag, words, i)
-            context = get_context_features(tags[i - 1], tag, words, i)
-            for feature in lexical + context:
+            lexical_key = (tag, i)
+            context_key = (tags[i-1], tag, i)
+            all_features = list(features["lexical"][lexical_key].keys())
+            if i > 0:
+                all_features += list(features["context"][context_key].keys())
+            for feature in all_features:
                 observed_frequencies[feature] += 1
         return observed_frequencies
 
-    """
-    def weight_update(self, estimated, observed, lr):
-        for feature, value in estimated.items():
-            self.weights[feature] -= value * lr
-        for feature, value in observed.items():
-            self.weights[feature] += value * lr  
-    """
+    def get_lexical(self, words):
+        feature_cache, score_cache = {}, {}
+        for i in range(len(words)):
+            for tag in self.tagset:
+                key = (tag, i)
+                if key not in score_cache:
+                    features, score = self.score(None, tag, words, i, mode="lexical")
+                    feature_cache[key] = features
+                    score_cache[key] = score
+        return feature_cache, score_cache
+
+    def get_context(self, words, tags):
+        feature_cache, score_cache = {}, {}
+        for i in range(1, len(words)):
+            for tag in tags:
+                for other_tag in tags:
+                    key = (tag, other_tag, i)
+                    if key not in score_cache:
+                        features, score = self.score(other_tag, tag, words, i, mode="context")
+                        feature_cache[key] = features
+                        score_cache[key] = score
+        return feature_cache, score_cache
+
+    def get_tags(self, words, lexical_scores):
+        """Given the lexical scores find out which tag sequence is the best."""
+        threshold = math.log(0.001)
+        max_lex_score = max(lexical_scores.values())
+        tags = self.tagset.copy()
+        #for i in range(1, len(words)-1):
+        #    for tag in tags:
+        #        if lexical_scores[(tag, i)] + threshold < max_lex_score:
+        #            tags.remove(tag)
+        return tags#[["<s>"]] + tags + [["</s>"]]
 
     def weight_update(self, estimated, observed, lr, mu):
         for feature, value in (list(estimated.items()) + list(observed.items())):
@@ -235,6 +204,21 @@ class CRFTagger:
                 "tagset": self.tagset}
         with open(self.paramfile, "wb") as handle:
             pickle.dump(data, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+    """
+    def step(self, words, forward):
+        values = init_scores(words, forward, self.tagset)
+        _range, direction = (range(1, len(words)), -1) if forward else (range(len(words) - 1)[::-1], 1)
+        for i in _range:
+            #cache = {}
+            for tag in values[i].keys():
+                for adjacent_tag, adjacent_score in values[i+direction].items():
+                    tags = (adjacent_tag, tag) if forward else (tag, adjacent_tag)
+                    #if tags not in cache:
+                    #    cache[tags] = math.log(adjacent_score + self.score(*tags, words, i))
+                    values[i][tag] += math.log(adjacent_score + self.score(*tags, words, i))#cache[tags]
+        return values
+    """
 
 
 if __name__ == '__main__':
