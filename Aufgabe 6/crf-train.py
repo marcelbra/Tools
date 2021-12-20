@@ -67,16 +67,8 @@ class CRFTagger:
             for tag in self.tagset:
                 for previous_tag, previous_score in viterbi_scores[i - 1].items():
                     score = math.log(previous_score + scores[(previous_tag, tag, i)])
-                    #TODO-NS: Stimmt das "oder"? Warum sollten wir ein Tag an der Stelle i überschreiben, nur weil es
-                    #TODO: nicht im Dictionary steht? Der Score sollte doch immer entscheiden?
-                    if tag not in viterbi_scores[i] or score > viterbi_scores[i][tag]:
-                        viterbi_scores[i][tag] = score
-                        best_prev_tag[i][tag] = previous_tag
-        tags.append("</s>")
-        for i in range(len(words) - 1, 0, -1):
-            best_tag = best_prev_tag[i][tag]
-            tags.append(best_tag)
-        return tags[::-1]
+
+
 
     def forward(self, words, scores, tags=None):
         values = init_scores(words, True, self.tagset)
