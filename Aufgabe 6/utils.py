@@ -60,18 +60,6 @@ def get_substrings_tag(tag, word, start=3, end=7):
             for i in range(len(word) - l + 1)]
 
 
-def sign(v: List):
-    sign_vector = []
-    for x in v:
-        if x == 0:
-            sign_vector.append(0)
-        elif x > 1:
-            sign_vector.append(1)
-        elif x < 1:
-            sign_vector.append(-1)
-    return sign_vector
-
-
 def get_word_shape(word):
     """Convert words to shapes depending on lowercase/ uppercase/ digits e.g. Testwort-717 -> Xx-0
     Return word shape, tag at current index"""
