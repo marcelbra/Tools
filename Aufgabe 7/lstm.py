@@ -15,7 +15,7 @@ import torch.nn as nn
 
 class LSTM:
 
-    def batch_data(self, data_path):
+    def build_datasets(self, data_path):
         labels = data.Field()
         text = data.Field()
 
