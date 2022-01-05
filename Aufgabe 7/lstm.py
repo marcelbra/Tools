@@ -31,8 +31,8 @@ class LSTM:
         text.build_vocab(train, test, val)
 
         #Testweises printen der Indices
-        #print(text.vocab.stoi["because"])
-        #print(text.vocab.itos[35])
+        print(text.vocab.stoi["because"])
+        print(text.vocab.itos[172])
 
         return train, test, val
 
