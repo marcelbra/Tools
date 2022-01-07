@@ -45,10 +45,14 @@ class TextDataset(Dataset):
 
     def __getitem__(self, idx):
         label, text = self.data.iloc[idx]
-        return label, text
+        return label, map_seq_to_ids(text)
 
     def __len__(self):
         return len(self.data)
+
+    def map_seq_to_ids(self, text):
+        # TODO: Hier ensteht das Wort -> ID mapping.
+        return text
 
 class Trainer:
 
