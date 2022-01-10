@@ -9,6 +9,7 @@ Sinem Kühlewind (geb. Demiraslan)
 """
 
 from utils import get_words_map_and_max_seq_len
+import matplotlib.pyplot as plt
 
 import sys
 from tqdm import tqdm
@@ -31,29 +32,39 @@ class LSTM(nn.Module):
                             hidden_size=config["hidden_dim"],
                             num_layers=config["num_layers"],
                             batch_first=True,
-                            bidirectional=False)
+                            bidirectional=False,
+                            dropout=config["dropout"])
         self.linear = nn.Linear(in_features=config["hidden_dim"],
                                 out_features=config["num_classes"])
         self.dropout = nn.Dropout(p=config["dropout"])
 
+        hidden = 30
+        self.s1 = nn.Linear(in_features=self.config["hidden_dim"],
+                            out_features=self.config["num_classes"])#out_features=hidden)
+        self.s2 = nn.Linear(in_features=hidden,
+                            out_features=self.config["num_classes"])
+
+
     def forward(self, inputs):
+
         inputs = inputs.to(torch.int64)
         x = self.embedding(inputs)
-        x = self.dropout(x)
+        #x = self.dropout(x)
         x, _ = self.lstm(x)
-        x = self.dropout(x)
-        x = self.linear(x)
-        #try:
+        #x = self.dropout(x)
+        #x = self.linear(x)
+        x = self.s1(x)
+        #x = self.s2(x)
+        """
+        s2 = nn.Linear(in_features=50,
+                      out_features=self.config["num_classes"])
+        x = s1(x)
+        x = s2(x)
+        """
         # Select only the last layer and reshape
         batch_size = list(x.shape)[0]  # Can happen that batch is not full
         x = x[:,-1:,:].view(batch_size,
                             self.config["num_classes"])
-        #except:
-        #    print("x", x)
-        #    print("x.shape", x.shape)
-        #    print("Exiting programm.")
-        #    sys.exit()
-
         return x
 
 class TextDataset(Dataset):
@@ -94,14 +105,24 @@ class Trainer:
 
     def do_epoch(self, model, dataloader, optimizer=None):
         model.eval() if optimizer is None else model.train()
-        n = len(dataloader.dataset)
         losses, accs = 0.0, 0.0
-        for label, text in tqdm(dataloader):
+        """
+        n = len(dataloader)
+        for label, text in dataloader:
             loss, acc = self.do_step(model, text, label, optimizer)
             losses += loss
             accs += acc
         losses = losses / n
         accs = accs / n
+        """
+        i = 0
+        n = 20
+        for label, text in dataloader:
+            if i >= n: break
+            loss, acc = self.do_step(model, text, label, optimizer)
+            losses += loss / n
+            accs += acc / n
+            i += 1
         return losses, accs
 
     def train(self, model, dataloaders, config):
@@ -110,43 +131,49 @@ class Trainer:
         train_losses, val_losses = [], []
         train_accs, val_accs = [], []
         for epoch in range(config["epochs"]):
-            print(f"Starting epoch {epoch} / {config['epochs']}.")
             train_loss, train_acc = self.do_epoch(model, dataloaders["train"], optimizer)
-            print(f"Validating epoch {epoch} / {config['epochs']}.")
             val_loss, val_acc = self.do_epoch(model, dataloaders["dev"])
             self.log(train_loss, train_acc, val_loss, val_acc,
-                     train_losses, val_losses, train_accs, val_accs)
+                     train_losses, val_losses, train_accs, val_accs, epoch)
             if val_acc > best_acc:
                 best_model, best_epoch, best_acc = model, epoch, val_acc
             if epoch - best_epoch > config["patience"]: break
-        return best_model, best_epoch, best_acc
+        return (best_model, best_epoch, best_acc,
+                train_losses, val_losses,
+                train_accs, val_accs)
+
+    def l(self, train_loss, epoch):
+        print(f"Epoch {epoch} train loss {train_loss}")
 
     def log(self, train_loss, train_acc, val_loss, val_acc,
-            train_losses, val_losses, train_accs, val_accs):
+            train_losses, val_losses, train_accs, val_accs, epoch):
         train_losses.append(train_loss)
         val_losses.append(val_loss)
         train_accs.append(train_acc)
         val_accs.append(val_acc)
-        print(f"Train loss: {train_loss}")
-        print(f"Training acc: {train_acc}")
-        print(f"Validation loss: {val_loss}")
-        print(f"Validation acc: {val_acc}")
-        print("\n"*3)
+        print(f"Epoch {epoch} train loss: {train_loss}")
+        #print(f"     Train loss: {train_loss}")
+        #print(f"Validation loss: {val_loss}")
+        #print(f"   Training acc: {train_acc}")
+        #print(f" Validation acc: {val_acc}")
 
 if __name__ == '__main__':
 
     config = {"num_embeddings": 5000,
-              "num_layers": 2,
+              "vocab_size": 5000,
               "num_classes": 5,
-              "embedding_dim": 300,
-              "hidden_dim": 100,
-              "dropout": 0.1,
-              "optimizer": optim.AdamW,
-              "epochs": 20,
-              "patience": 20,
-              "lr": 1e-3,
-              "batch_size": 64,
-              "vocab_size": 5000,}
+              "patience": 1000,
+
+
+              "dropout": 0.5,
+              "num_layers": 2,
+              "embedding_dim": 400,
+              "hidden_dim": 200,
+              "optimizer": optim.SGD,
+              "epochs": 10,
+              "lr": 1e-2,
+              "batch_size": 128,
+              }
 
     names = ["train", "dev", "test"]
     paths = ["/home/marcelbraasch/PycharmProjects/Tools/Aufgabe 7/data/sentiment.train.tsv",
@@ -161,12 +188,32 @@ if __name__ == '__main__':
                                   max_seq_len) for name in names}
     dataloaders = {name: DataLoader(datasets[name], batch_size=config["batch_size"]) for name in names}
 
+
     # Init model and train
     model = LSTM(config=config)
-    #if torch.cuda.is_available():
-    #    model = model.to(device='cuda')
+    if torch.cuda.is_available():
+        model = model.to(device='cuda')
     trainer = Trainer()
-    trainer.train(model, dataloaders, config)
+    (best_model, best_epoch, best_acc,
+     train_losses, val_losses,
+     train_accs, val_accs) = trainer.train(model, dataloaders, config)
+
+    # Plot results
+    steps = list(range(len(train_losses)))
+    train_losses = [float(x) for x in train_losses]
+    val_losses = [float(x) for x in val_losses]
+    train_accs = [float(x) for x in train_accs]
+    val_accs = [float(x) for x in val_accs]
+    fig, axs = plt.subplots(2, 2)
+    axs[0, 0].plot(steps, train_losses)
+    axs[0, 0].set_title('Training Loss')
+    axs[0, 1].plot(steps, val_losses, 'tab:orange')
+    axs[0, 1].set_title('Validation Loss')
+    axs[1, 0].plot(steps, train_accs, 'tab:green')
+    axs[1, 0].set_title('Training Accuracy')
+    axs[1, 1].plot(steps, val_accs, 'tab:red')
+    axs[1, 1].set_title('Validation Accuracy')
+    fig.show()
 
 
 
