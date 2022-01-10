@@ -38,33 +38,12 @@ class LSTM(nn.Module):
                                 out_features=config["num_classes"])
         self.dropout = nn.Dropout(p=config["dropout"])
 
-        hidden = 30
-        self.s1 = nn.Linear(in_features=self.config["hidden_dim"],
-                            out_features=self.config["num_classes"])#out_features=hidden)
-        self.s2 = nn.Linear(in_features=hidden,
-                            out_features=self.config["num_classes"])
-
 
     def forward(self, inputs):
-
         inputs = inputs.to(torch.int64)
         x = self.embedding(inputs)
-        #x = self.dropout(x)
         x, _ = self.lstm(x)
-        #x = self.dropout(x)
-        #x = self.linear(x)
-        x = self.s1(x)
-        #x = self.s2(x)
-        """
-        s2 = nn.Linear(in_features=50,
-                      out_features=self.config["num_classes"])
-        x = s1(x)
-        x = s2(x)
-        """
-        # Select only the last layer and reshape
-        batch_size = list(x.shape)[0]  # Can happen that batch is not full
-        x = x[:,-1:,:].view(batch_size,
-                            self.config["num_classes"])
+        x = self.linear(x[:,-1,:])
         return x
 
 class TextDataset(Dataset):
@@ -94,6 +73,7 @@ class Trainer:
         loss_func = nn.CrossEntropyLoss()
         loss = loss_func(logits, targets)
         if optimizer:
+            #optimizer = optim.SGD(model.parameters(), lr=1e-3, weight_decay=1e-5, momentum=0.9)
             loss.backward()
             optimizer.step()
             optimizer.zero_grad()
@@ -104,9 +84,8 @@ class Trainer:
         return loss, acc
 
     def do_epoch(self, model, dataloader, optimizer=None):
-        model.eval() if optimizer is None else model.train()
+        model.train() if optimizer else model.eval()
         losses, accs = 0.0, 0.0
-        """
         n = len(dataloader)
         for label, text in dataloader:
             loss, acc = self.do_step(model, text, label, optimizer)
@@ -114,15 +93,6 @@ class Trainer:
             accs += acc
         losses = losses / n
         accs = accs / n
-        """
-        i = 0
-        n = 20
-        for label, text in dataloader:
-            if i >= n: break
-            loss, acc = self.do_step(model, text, label, optimizer)
-            losses += loss / n
-            accs += acc / n
-            i += 1
         return losses, accs
 
     def train(self, model, dataloaders, config):
@@ -137,13 +107,11 @@ class Trainer:
                      train_losses, val_losses, train_accs, val_accs, epoch)
             if val_acc > best_acc:
                 best_model, best_epoch, best_acc = model, epoch, val_acc
-            if epoch - best_epoch > config["patience"]: break
+            if epoch - best_epoch > config["patience"]:
+                break
         return (best_model, best_epoch, best_acc,
                 train_losses, val_losses,
                 train_accs, val_accs)
-
-    def l(self, train_loss, epoch):
-        print(f"Epoch {epoch} train loss {train_loss}")
 
     def log(self, train_loss, train_acc, val_loss, val_acc,
             train_losses, val_losses, train_accs, val_accs, epoch):
@@ -151,7 +119,7 @@ class Trainer:
         val_losses.append(val_loss)
         train_accs.append(train_acc)
         val_accs.append(val_acc)
-        print(f"Epoch {epoch} train loss: {train_loss}")
+        print(f"Epoch {epoch} train acc: {train_acc}")
         #print(f"     Train loss: {train_loss}")
         #print(f"Validation loss: {val_loss}")
         #print(f"   Training acc: {train_acc}")
@@ -162,18 +130,17 @@ if __name__ == '__main__':
     config = {"num_embeddings": 5000,
               "vocab_size": 5000,
               "num_classes": 5,
-              "patience": 1000,
-
-
-              "dropout": 0.5,
-              "num_layers": 2,
-              "embedding_dim": 400,
-              "hidden_dim": 200,
-              "optimizer": optim.SGD,
-              "epochs": 10,
-              "lr": 1e-2,
-              "batch_size": 128,
+              "patience": 10,
+              "dropout": 0.0,
+              "num_layers": 1,
+              "embedding_dim": 50,
+              "hidden_dim": 50,
+              "optimizer": optim.Adam,
+              "epochs": 20,
+              "lr": 1e-3,
+              "batch_size": 32,
               }
+
 
     names = ["train", "dev", "test"]
     paths = ["/home/marcelbraasch/PycharmProjects/Tools/Aufgabe 7/data/sentiment.train.tsv",
@@ -189,10 +156,12 @@ if __name__ == '__main__':
     dataloaders = {name: DataLoader(datasets[name], batch_size=config["batch_size"]) for name in names}
 
 
-    # Init model and train
+    # Init model
     model = LSTM(config=config)
     if torch.cuda.is_available():
         model = model.to(device='cuda')
+
+    # Train
     trainer = Trainer()
     (best_model, best_epoch, best_acc,
      train_losses, val_losses,
