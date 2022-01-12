@@ -5,6 +5,18 @@
 
 import pandas as pd
 from collections import Counter, defaultdict
+from random import choice
+
+def sample_configs(budget, config_ranges):
+    configs = [{k:choice(v) for k,v in config_ranges.items()}
+               for i in range(budget)]
+    # it is relatively unlikely but it can happen that we have
+    # the same config twice, so we need to filter for duplicates.
+    # Dicts are not hashable so we can't do list(set(dict)) thus
+    # use the following trick.
+    configs = [dict(t) for t in {tuple(d.items()) for d in configs}]
+    return configs
+
 
 def get_words_map_and_max_seq_len(dirs, k=5000):
     max_seq_len = float("-inf")
