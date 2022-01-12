@@ -65,7 +65,7 @@ def recursion(node: Tree, index: int):
                 recursion(childs_children, index)
     else:
         consituent = (node.node, index, index+len(curr_children)+1)
-        constituents.append(consituent)
+        constituents.append(consituent)#
         for i,child in enumerate(curr_children):
             recursion(child,index+i)
 
