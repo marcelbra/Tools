@@ -1,4 +1,6 @@
+import os
 import re
+from tqdm import tqdm
 
 class Tree:
 
@@ -11,26 +13,27 @@ class Tree:
     def get_indices(self):
         return [self.start, self.end]
 
-def generate_tagset():
+def generate_tagset(path):
     tags = set()
-    path = "/home/marcelbraasch/Downloads/penntreebank/train.txt"
-    with open(path, "r") as f:
-        func = lambda tree: [x for x in re.finditer(r"[()]|[^\s()]+", tree)]
-        for line in f:
-            tokens = [x[0] for x in func(line)]
-            for i in range(1, len(tokens)):
-                if tokens[i - 1] == "(":
-                    tags.add(tokens[i])
-    return tags
+    names = os.listdir(path)
+    for name in names:
+        with open(path + name, "r") as f:
+            func = lambda tree: [x for x in re.finditer(r"[()]|[^\s()]+", tree)]
+            for line in tqdm(f):
+                tokens = [x[0] for x in func(line)]
+                for i in range(1, len(tokens)):
+                    if tokens[i - 1] == "(":
+                        tags.add(tokens[i])
+        return tags
 
-def construct_tree():
+def construct_tree_rec():
     global index
     while True:
         token = tokens.pop(0)[0]
         if token == ")":
             return node
         elif token == "(":
-            child = construct_tree()
+            child = construct_tree_rec()
             has_other_children = node.children == []
             node.children.append(child)
             next_token = tokens[0][0]
@@ -56,10 +59,13 @@ def construct_tree():
             node.end = index + 1
             index += 1
 
-def construct_constituents(node):
+# def construct_tree(tokens, words, tags, index):
+#     return construct_tree_rec()
+
+def construct_constituents(_node):
     """Do in-order traversal to construct the constituent list."""
-    constituents.append((node.name, node.start, node.end))
-    for child in node.children:
+    constituents.append((_node.name, _node.start, _node.end))
+    for child in _node.children:
         construct_constituents(child)
 
 def construct_original_string():
@@ -82,13 +88,18 @@ def construct_original_string():
         closing = [x for x in closing if x]
     return tree
 
+path = "/home/marcelbraasch/PycharmProjects/Tools/Aufgabe 8/PennTreebank/"
+data = []
+tags = generate_tagset(path)
+names = os.listdir(path)
+for name in names:
+    with open(path + name, "r") as f:
+        for parse_tree in tqdm(f):
+            tokens = [x for x in re.finditer(r"[()]|[^\s()]+", parse_tree)][1:]
+            words = []
+            constituents = []
+            index = 0
+            tree = construct_tree_rec()
+            construct_constituents(tree)
+            data.append((words, constituents))
 
-tags = ["DOT", "NNP", "NP", "VBZ", "VP", "S", "TOP"]
-parse_tree = "(TOP(S(NP(NNP Ms.)(NNP Haag))(VP(VBZ plays)(NP(NNP Elianti)))(DOT .)))"
-tokens = [x for x in re.finditer(r"[()]|[^\s()]+", parse_tree)][1:]
-words = []
-constituents = []
-index = 0
-tree = construct_tree()
-construct_constituents(tree)
-original = construct_original_string()
