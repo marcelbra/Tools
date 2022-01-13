@@ -5,76 +5,78 @@ class Tree:
     def __init__(self, name):
         self.children = []
         self.name = name
-        # self.start = 0
-        # self.end = 0
+        self.start = 0
+        self.end = 0
 
-        def __iter__(self):
-            self.n = 0
-            return self
+    def __iter__(self):
+        self.n = 0
+        return self
 
-        def __next__(self):
-            result = self.children[self.n]
-            self.n += 1
-            return result
+    def __next__(self):
+        result = self.children[self.n]
+        self.n += 1
+        return result
+
+    def get_indices(self):
+        return [self.start, self.end]
+
+index = 0
 
 def construct_tree():
+    global index
     while True:
         token = tokens.pop(0)[0]
         if token == ")":
             return node
-        if token == "(":
+        elif token == "(":
             child = construct_tree()
+            has_other_children = node.children == []
             node.children.append(child)
-        if token in tags:
+            next_token = tokens[0][0]
+            # Get current node's child indices to build its indices
+            indices = []
+            for child in node.children:
+                indices.extend(child.get_indices())
+            node.start = min(indices)
+            node.end = max(indices)
+            # Merging
+            if next_token != "(" and has_other_children:
+                node_name = node.name
+                child = node.children[0]
+                child_name = child.name
+                node = child
+                node.name = f"{node_name}={child_name}"
+                s = 0
+        elif token in tags:
             node = Tree(token)
         else:
             words.append(token)
+            node.start = index
+            node.end = index + 1
+            index += 1
 
-def chain_rule(tree, level):
-
-    increment = 1
-
-    if len(tree.children) == 1:
-        child = tree.children[0]
-        is_not_terminal = len(child.children) != 0
-        if is_not_terminal:
-            tree = Tree(f"{tree.name}={child.name}")
-            tree.children = child.children
-            increment = 0
-
-    elif len(tree.children) > 1:
-        for i, child in enumerate(tree.children):
-                tree.children[i], level = chain_rule(child, level+1)
-
-    return tree, level + increment
-
-def chain(current: Tree) -> Tree:
-
-    if len(current.children) == 1:
-        child = current.children[0]
-        child_has_children = child.children != []
-        if child_has_children:
-            tree = Tree(f"{tree.name}={child.name}")
-            tree.children = child.children
-    return tree
 
 tags = ["DOT", "NNP", "NP", "VBZ", "VP", "S", "TOP"]
 parse_tree = "(TOP(S(NP(NNP Ms.)(NNP Haag))(VP(VBZ plays)(NP(NNP Elianti)))(DOT .)))"
+parse_tree = "(TOP(S(NP(NNP Ms.)(NNP Haag))(VP(VBZ plays))))"
 tokens = [x for x in re.finditer(r"[()]|[^\s()]+", parse_tree)][1:]
 words = []
 tree = construct_tree()
-tree, level = chain(tree, 0)
-tree, level = chain_rule(tree, level)
 s = 0
 
 
 
-
-
-
-
-
-
+def generate_tagset():
+    tags = set()
+    path = "/home/marcelbraasch/Downloads/penntreebank/train.txt"
+    with open(path, "r") as f:
+        func = lambda tree: [x for x in re.finditer(r"[()]|[^\s()]+", tree)]
+        for line in f:
+            tokens = [x[0] for x in func(line)]
+            for i in range(1, len(tokens)):
+                if tokens[i-1] == "(":
+                    tags.add(tokens[i])
+    return tags
 
 #
 # constituents = []
