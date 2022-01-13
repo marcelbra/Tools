@@ -92,4 +92,3 @@ index = 0
 tree = construct_tree()
 construct_constituents(tree)
 original = construct_original_string()
-#
