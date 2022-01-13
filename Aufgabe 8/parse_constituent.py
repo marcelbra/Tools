@@ -41,7 +41,7 @@ def construct_tree():
             node.end = max(indices)
             # Merging
             if next_token != "(" and has_other_children:
-                node_name = node.name
+                node_name = node.name #
                 child = node.children[0]
                 child_name = child.name
                 node = child
