@@ -138,4 +138,4 @@ index = 0
 tree = construct_tree()  # Modifies `words` inplace
 construct_constituents(tree)  # Modifies `constituents` inplace
 original = reconstruct_original()
-assert re.sub(r"\s", "", original)==re.sub(r"\s", "", parse_tree), "Given string and reconstructed are not equal"
+assert re.sub(r"\s", "", original)==re.sub(r"\s", "", parse_tree), "Given string and reconstructed are not equal"#
