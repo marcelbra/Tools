@@ -1,146 +1,178 @@
 import os
+import sys
 import re
-from tqdm import tqdm
+# from tqdm import tqdm
 import pickle
-from tag_helper import (map_tag_to_modified_tag,
-                        modified_tag_to_tag)
-class Tree:
+from tag_helper import map_tag_to_modified_tag, modified_tag_to_tag
+from tree import Tree
 
-    def __init__(self, name):
-        self.children = []
-        self.name = name
-        self.start = 0
-        self.end = 0
+class DataCreator:
 
-    def get_indices(self):
-        return [self.start, self.end]
+    def __init__(self, data_path, tagset_path):
+        self.tags = self.load_tagset(tagset_path)
+        self.trees = self.load_data(data_path)
 
-def generate_tagset(path, save_tagset=False):
-    tags = set()
-    names = os.listdir(path)
-    modified = tag_to_modified_tag()
-    for name in names:
-        with open(path + name, "r") as f:
-            func = lambda tree: [x for x in re.finditer(r"[()]|[^\s()]+", tree)]
-            for line in tqdm(f):
-                tokens = [x[0] for x in func(line)]
-                for i in range(1, len(tokens)):
-                    if tokens[i - 1] == "(":
-                        tags.add(tokens[i])
-    tags = [modified[tag] for tag in tags]
-    if save_tagset:
-        with open("tagset.pkl", "wb") as (handle):
-            pickle.dump(tags, handle, protocol=pickle.HIGHEST_PROTOCOL)
-    return tags
+    def run(self):
+        data = {}
+        new_trees = []
+        for name, trees in self.trees.items():
+            current = []
+            for i, parse_tree in enumerate(trees):
+                new_trees.append(parse_tree[:15])
 
-def load_tagset():
-    path = "/home/marcelbraasch/PycharmProjects/Tools/Aufgabe 8/tagset.pkl"
-    tags = []
-    with open(path, "rb") as handle:
-        tags = pickle.load(handle)
-    return tags
+                # Debugging variables
+                # s = 0
+                # self.parse_tree = parse_tree
+                # self.i = i
 
-def construct_tree():
-    global index
-    while True:
-        token = tokens.pop(0)
-        if token == ")":
-            return node
-        elif token == "(":
-            child = construct_tree()
-            has_other_children = node.children == []
-            node.children.append(child)
-            next_token = tokens[0]
-            # Get current node's child indices to build its indices
-            indices = []
-            for child in node.children:
-                indices.extend(child.get_indices())
-            node.start = min(indices)
-            node.end = max(indices)
-            # Merging
-            if next_token != "(" and has_other_children:
-                node_name = node.name #
-                child = node.children[0]
-                child_name = child.name
-                node = child
-                node.name = f"{node_name}={child_name}"
-                s = 0
-        elif token in tags:
-            node = Tree(token)
-        else:
-            words.append(token)
-            node.start = index
-            node.end = index + 1
-            index += 1
+                # Variables things will be saved to
+                self.words = []
+                self.constituents = []
+                self.index = 0
 
-def reconstruct_original():
-    closing = []
-    tree = "("
-    for constituent in constituents:
-        name = modified_tag_to_tag(constituent[0])
-        start, end = constituent[1], constituent[2]
-        diff = end - start
+                # Create tokens
+                self.tokens = [x[0] for x in re.finditer(r"[()]|[^\s()]+", parse_tree.replace("\n", ""))][1:]
+                self.tokens = map_tag_to_modified_tag(self.tokens)  # Maps tags like "."  to ".-TAG"
 
-        # Restore merged constituents and set flag for adding two brackets
-        add_two_brackets = True if "=" in name else False
-        name = name.replace("=", "(")
-        # Add constituent
-        tree += name if tree[-1] == "(" else "(" + name
+                # Constructs tree representation, word and constituent list
+                tree = self.construct_tree()
+                self.construct_constituents(tree)
 
-        # If we have reached a leaf ad d the next word
-        if diff == 1:
-            tree += " " + words.pop(0) + ")"
-            # Decrement bracket counter once we have seen a word
-            closing = [x - 1 for x in closing]
+                original = self.reconstruct_original()
 
-        # Add closing brackets
-        if diff != 1:
-            closing.append(diff)
-        if add_two_brackets:
-            if tree != '(TOP(S':  # Special case in the beginning
-                closing.append(diff - 1)
-        tree += ")" * closing.count(0)
-        # Remove 0s we just used
-        closing = [x for x in closing if x]
+                current.append({"consituents": self.constituents,
+                                "words": self.words})
+            data[name] = current
 
-    tree += ")"
-    return tree
+        return data
 
-def construct_constituents(node):
-    """Do in-order traversal to construct the constituent list."""
-    constituents.append((node.name, node.start, node.end))
-    for child in node.children:
-        construct_constituents(child)
+    def construct_tree(self):
+        while True:
+            token = self.tokens.pop(0)
+            if token == ")":
+                return node
+            elif token == "(":
+                child = self.construct_tree()
+                has_other_children = node.children == []
+                node.children.append(child)
+                next_token = self.tokens[0]
+                # Get current node's child indices to build its indices
+                indices = []
+                for child in node.children:
+                    indices.extend(child.get_indices())
+                node.start = min(indices)
+                node.end = max(indices)
+                # Merging
+                if next_token != "(" and has_other_children:
+                    node_name = node.name  #
+                    child = node.children[0]
+                    child_name = child.name
+                    node = child
+                    node.name = f"{node_name}={child_name}"
+                    s = 0
+            elif token in self.tags:
+                node = Tree(token)
+            else:
+                self.words.append(token)
+                try:
+                    node.start = self.index
+                except:
+                    print(token)
+                    print(self.i)
+                    sys.exit()
+                node.end = self.index + 1
+                self.index += 1
 
-def load_test_data():
-    path = "/home/marcelbraasch/PycharmProjects/Tools/Aufgabe 8/PennTreebank/"
-    name = os.listdir(path)[0]
-    counter = 0
-    trees = []
-    with open(path + name) as f:
-        for line in f:
-            trees.append(line)
-            counter += 1
-            if counter >= 10:
-                break
-    return trees
+    def generate_tagset(self, path, save_tagset=False):
+        tags = set()
+        names = os.listdir(path)
+        modified = tag_to_modified_tag()
+        for name in names:
+            with open(path + name, "r") as f:
+                func = lambda tree: [x for x in re.finditer(r"[()]|[^\s()]+", tree)]
+                for line in tqdm(f):
+                    tokens = [x[0] for x in func(line)]
+                    for i in range(1, len(tokens)):
+                        if tokens[i - 1] == "(":
+                            tags.add(tokens[i])
+        tags = [modified[tag] for tag in tags]
+        if save_tagset:
+            with open("tagset.pkl", "wb") as (handle):
+                pickle.dump(tags, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        return tags
 
+    def load_tagset(self, path):
+        try:
+            tags = []
+            with open(path, "rb") as handle:
+                tags = pickle.load(handle)
+            return tags
+        except:
+            return self.generate_tagset(path)
 
-path = "/home/marcelbraasch/PycharmProjects/Tools/Aufgabe 8/PennTreebank/"
-tags = load_tagset()
-trees = load_test_data()
+    def construct_constituents(self, node):
+        """Do in-order traversal to construct the constituent list."""
+        self.constituents.append((node.name, node.start, node.end))
+        for child in node.children:
+            self.construct_constituents(child)
 
+    def load_data(self, path):
+        names = os.listdir(path)
+        # counter = 0
+        trees = {}
+        for name in names:
+            with open(path + name) as f:
+                current = []
+                for line in f:
+                    current.append(line)
+                trees[name.split(".")[0]] = current
+        return trees
 
-parse_tree = trees[2].replace("\n", "")
-tokens = [x[0] for x in re.finditer(r"[()]|[^\s()]+", parse_tree)][1:]
-tokens = map_tag_to_modified_tag(tokens)
+    def reconstruct_original(self):
+        closing = []
+        tree = "("
+        for constituent in self.constituents:
 
-words = []
-constituents = []
-index = 0
-tree = construct_tree() # Modifies `words` inplace
+            name = modified_tag_to_tag(constituent[0])
+            start, end = constituent[1], constituent[2]
+            diff = end - start
 
-construct_constituents(tree)  # Modifies `constituents` inplace
-original = reconstruct_original()
-if re.sub(r"\s", "", original)!=re.sub(r"\s", "", parse_tree):
-    print(f"Given string and reconstructed are not equal.")
+            # Restore merged constituents and set flag for adding two brackets
+            add_two_brackets = True if "=" in name else False
+            name = name.replace("=", "(")
+
+            # Add constituent
+            tree += name if tree[-1] == "(" else "(" + name
+
+            # If we have reached a leaf add the next word
+            if diff == 1:
+                """Die Rekonstruktion ist noch etwas fehlerhaft.
+                Hier an der Stelle kann es passieren, dass wir trotz einer
+                Differenz von 1 keine Wörter mehr haben. Zeitlich bedingt
+                haben wir es nicht geschafft diesen Bug zu beheben."""
+                if self.words:
+                    tree += " " + self.words.pop(0) + ")"
+                # Decrement bracket counter once we have seen a word
+                closing = [x - 1 for x in closing]
+
+            # Add closing brackets
+            if diff != 1:
+                closing.append(diff)
+            if add_two_brackets:
+                if not tree.startswith('(TOP('):  # Special case in the beginning
+                    closing.append(diff - 1)
+            tree += ")" * closing.count(0)
+            # Remove 0s we just used
+            closing = [x for x in closing if x]
+
+        tree += ")"
+        return tree
+
+def main():
+    data_path = "/home/marcelbraasch/PycharmProjects/Tools/Aufgabe 8/PennTreebank/"
+    tagset_path = "/home/marcelbraasch/PycharmProjects/Tools/Aufgabe 8/tagset.pkl"
+    creator = DataCreator(data_path, tagset_path)
+    data = creator.run()
+
+if __name__ == "__main__":
+    main()
