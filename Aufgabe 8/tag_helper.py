@@ -15,16 +15,25 @@ d = {'PRN': 'PRN', 'JJR': 'JJR', 'INTJ': 'INTJ', 'NNS': 'NNS',
      'JJS': 'JJS', 'NNP': 'NNP', 'SYM': 'SYM', ',': ',-TAG',
      'VBN': 'VBN', '$': '$-TAG'}
 
+currency_tags = ["US$", "C$", "HK$", "HK$", "NZ$", "A$", "C", "M$", "S$"]
+lrb_tags = ["-LCB-"]
+punct_tags = ["?", "!"]
+
 def map_tag_to_modified_tag(tokens):
     for i in range(len(tokens)):
         current_token = tokens[i]
         next_token = tokens[i+1]
-        """        
-        Offensichtlich ist das mappen relativ aufwändig und ist feature engineered.
-        Das Problem war, dass wir zu spät damit angefangen haben andere samples zu testen.
-        Wir dachten es genügt "." auf ".-TAG", "$" auf "$-TAG" etc. zu mappen. Später
-        ist uns dann aufgefallen, dass es noch weitere Ausnahmen gibt. Wir haben alle
-        abgedeckt, aber wie gesagt, es wäre sicherlich einfacher gegangen.        
+        """
+        Die Idee hier war folgende. Unser rekursiver Algorithmus prüft ob ein Token
+        ein Tag ist oder nicht. Wenn es eins ist, dann erstellt er auf der entsprechenden
+        Rekursionsebene ein Knoten. Das Problem war, dass z.B. das Tag von "." auch "." war.
+        Daher haben wir uns überlegt, dass wir "." (das Tag von ".") in "." umwandeln. Das
+        hatte auch Sinn ergeben, bis wir gemerkt haben, dass "?" auch "." als Tag hat.
+        Und bis wir gemerkt haben, dass z.B. "$" sehr viele verschiedene mögliche Realisationen 
+        hat. Daher ist das mappen relativ aufwändig, feature engineered und wäre sicherlich 
+        einfacher zu lösen geweisen. Das Problem war, dass wir zu spät damit angefangen haben
+        andere samples zu testen und nun leider zu wenig Zeit haben zu refactorn.
+        Nur, falls Sie sich wundern was hier passiert und warum wir uns das Leben so schwer machen.
         """
         if (
             (current_token==next_token and current_token not in [")", "("])
@@ -45,9 +54,9 @@ def tag_to_modified_tag(tag):
         return d[tag]
     else:
         return tag
-
 def modified_tag_to_tag(modified):
     rev_d = {value:key for key,value in d.items()}
+    currency_exceptions = {""}
     if modified in rev_d:
         return rev_d[modified]
     else:
