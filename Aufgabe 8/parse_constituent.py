@@ -2,10 +2,8 @@ import os
 import re
 from tqdm import tqdm
 import pickle
-from tag_helper import (map_tag_to_word,
-                        map_word_to_tag,
-                        restore_replaced_tag,
-                        substitute_tags)
+from tag_helper import (map_tag_to_modified_tag,
+                        modified_tag_to_tag)
 class Tree:
 
     def __init__(self, name):
@@ -20,6 +18,7 @@ class Tree:
 def generate_tagset(path, save_tagset=False):
     tags = set()
     names = os.listdir(path)
+    modified = tag_to_modified_tag()
     for name in names:
         with open(path + name, "r") as f:
             func = lambda tree: [x for x in re.finditer(r"[()]|[^\s()]+", tree)]
@@ -28,7 +27,7 @@ def generate_tagset(path, save_tagset=False):
                 for i in range(1, len(tokens)):
                     if tokens[i - 1] == "(":
                         tags.add(tokens[i])
-    tags = [map_word_to_tag(x) for x in tags]
+    tags = [modified[tag] for tag in tags]
     if save_tagset:
         with open("tagset.pkl", "wb") as (handle):
             pickle.dump(tags, handle, protocol=pickle.HIGHEST_PROTOCOL)
@@ -78,13 +77,13 @@ def reconstruct_original():
     closing = []
     tree = "("
     for constituent in constituents:
-        constituent = restore_replaced_tag(constituent)
+        name = modified_tag_to_tag(constituent[0])
         start, end = constituent[1], constituent[2]
         diff = end - start
 
         # Restore merged constituents and set flag for adding two brackets
-        add_two_brackets = True if "=" in constituent[0] else False
-        name = constituent[0].replace("=", "(")
+        add_two_brackets = True if "=" in name else False
+        name = name.replace("=", "(")
         # Add constituent
         tree += name if tree[-1] == "(" else "(" + name
 
@@ -126,16 +125,22 @@ def load_test_data():
                 break
     return trees
 
+
+path = "/home/marcelbraasch/PycharmProjects/Tools/Aufgabe 8/PennTreebank/"
 tags = load_tagset()
 trees = load_test_data()
 
-# A run for one example
-parse_tree = trees[0]
-tokens = substitute_tags([x[0] for x in re.finditer(r"[()]|[^\s()]+", parse_tree)][1:])
+
+parse_tree = trees[2].replace("\n", "")
+tokens = [x[0] for x in re.finditer(r"[()]|[^\s()]+", parse_tree)][1:]
+tokens = map_tag_to_modified_tag(tokens)
+
 words = []
 constituents = []
 index = 0
-tree = construct_tree()  # Modifies `words` inplace
+tree = construct_tree() # Modifies `words` inplace
+
 construct_constituents(tree)  # Modifies `constituents` inplace
 original = reconstruct_original()
-assert re.sub(r"\s", "", original)==re.sub(r"\s", "", parse_tree), "Given string and reconstructed are not equal"#
+if re.sub(r"\s", "", original)!=re.sub(r"\s", "", parse_tree):
+    print(f"Given string and reconstructed are not equal.")
