@@ -54,14 +54,21 @@ class SpanEncoder(nn.Module):
         padded_word_repr = torch.cat((zeros, word_repr, zeros), dim=1)
         spans, _ = self.bi_lstm(padded_word_repr)
         forward_repr, backward_repr = spans[:,:,:dim], spans[:,:,dim:]
+
         r_iks = torch.empty((length,length,batch_size,1,dim*2))
-        for i in range(length):
-            for k in range(length):#-i+1):
-                forward_i = forward_repr[:,i:i+1,:]
-                backward_i = forward_repr[:,i+1:i+2,:]
-                forward_k = forward_repr[:,k:k+1,:]
-                backward_k = forward_repr[:,k+1:k+2,:]
-                r_iks[i][k] = torch.cat((forward_k - forward_i,backward_i-backward_k),dim=2)
+
+        def create_r_ik(forward_repr, backward_repr, i, k):
+            # 1. Dim = Batch, 2. Dim = Word, 3. Dim = Embedding
+            forward_i = forward_repr[:,i:i+1,:]
+            backward_i = backward_repr[:,i+1:i+ 2,:]
+            forward_k = forward_repr[:,k:k+1,:]
+            backward_k = backward_repr[:,k+1:k+ 2,:]
+            return torch.cat((forward_k - forward_i, backward_i-backward_k),dim=2)
+
+        for i in range(1, length-1):
+            for k in range(i+1, length-1):
+                r_iks[i][k] = create_r_ik(forward_repr, backward_repr, i, k)
+
         r_iks = r_iks.view(length,length,batch_size,dim*2)
         return r_iks
 
