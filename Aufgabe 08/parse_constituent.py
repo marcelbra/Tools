@@ -169,8 +169,8 @@ class DataCreator:
         return tree
 
 def main():
-    data_path = "/home/marcelbraasch/PycharmProjects/Tools/Aufgabe 8/PennTreebank/"
-    tagset_path = "/home/marcelbraasch/PycharmProjects/Tools/Aufgabe 8/tagset.pkl"
+    data_path = "/Aufgabe 08/PennTreebank/"
+    tagset_path = "/Aufgabe 08/tagset.pkl"
     creator = DataCreator(data_path, tagset_path)
     data = creator.run()
 
