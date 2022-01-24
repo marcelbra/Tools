@@ -7,9 +7,11 @@ Nadja Seeberg
 Sinem Kühlewind
 """
 
+import argparse
 import torch
 import torch.nn as nn
 from torch.nn import LSTM
+
 
 class WordEncoder(nn.Module):
 
@@ -37,7 +39,6 @@ class WordEncoder(nn.Module):
         suffix_repr, _ = self.backward_lstm(suf)
         word_representation = torch.cat((suffix_repr, prefix_repr), dim=2)
         return word_representation
-        # return prefix_repr, suffix_repr
 
 class SpanEncoder(nn.Module):
     def __init__(self, config):
@@ -55,7 +56,7 @@ class SpanEncoder(nn.Module):
         spans, _ = self.bi_lstm(padded_word_repr)
         forward_repr, backward_repr = spans[:,:,:dim], spans[:,:,dim:]
         r_iks = torch.empty((batch_size, 0, 2*dim))
-        for i in range(1, length):
+        for i in range(1, length+1):
             forward = forward_repr[:,i:,:] - forward_repr[:,:-i,:]
             backward = backward_repr[:,:-i,:] - backward_repr[:,i:,:]
             span_repr = torch.cat((forward, backward), dim=2)
@@ -82,8 +83,10 @@ class Parser(nn.Module):
         return span_label_scores
 
 def main():
+
     config = {"num_suffixes": 500,
               "num_prefixes": 500,
+              "num_class": 10,
               "embeddings_dim": 100,
               "word_encoder_hidden_dim": 100,
               "span_encoder_hidden_dim": 200,
@@ -91,7 +94,6 @@ def main():
               "span_encoder_lstm_dropout": 0.1,
               "fc_dropout": 0.1,
               "fc_hidden_dim": 32,
-              "num_class": 10,
               "batch_size": 32,
               }
 
@@ -107,7 +109,6 @@ def main():
     span_repr = span_encoder(word_repr)
     parser = Parser(config)
     scores = parser(span_repr)
-    s = 0
 
 if __name__=="__main__":
     main()
