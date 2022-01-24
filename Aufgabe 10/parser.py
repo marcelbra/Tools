@@ -54,22 +54,12 @@ class SpanEncoder(nn.Module):
         padded_word_repr = torch.cat((zeros, word_repr, zeros), dim=1)
         spans, _ = self.bi_lstm(padded_word_repr)
         forward_repr, backward_repr = spans[:,:,:dim], spans[:,:,dim:]
-
-        r_iks = torch.empty((length,length,batch_size,1,dim*2))
-
-        def create_r_ik(forward_repr, backward_repr, i, k):
-            # 1. Dim = Batch, 2. Dim = Word, 3. Dim = Embedding
-            forward_i = forward_repr[:,i:i+1,:]
-            backward_i = backward_repr[:,i+1:i+ 2,:]
-            forward_k = forward_repr[:,k:k+1,:]
-            backward_k = backward_repr[:,k+1:k+ 2,:]
-            return torch.cat((forward_k - forward_i, backward_i-backward_k),dim=2)
-
-        for i in range(1, length-1):
-            for k in range(i+1, length-1):
-                r_iks[i][k] = create_r_ik(forward_repr, backward_repr, i, k)
-
-        r_iks = r_iks.view(length,length,batch_size,dim*2)
+        r_iks = torch.empty((batch_size, 0, 2*dim))
+        for i in range(1, length):
+            forward = forward_repr[:,i:,:] - forward_repr[:,:-i,:]
+            backward = backward_repr[:,:-i,:] - backward_repr[:,i:,:]
+            span_repr = torch.cat((forward, backward), dim=2)
+            r_iks = torch.cat((r_iks, span_repr), dim=1)
         return r_iks
 
 class Parser(nn.Module):
@@ -78,6 +68,7 @@ class Parser(nn.Module):
         self.feedforward = nn.Sequential(
             nn.Linear(config["span_encoder_hidden_dim"]*2,
                       config["fc_hidden_dim"]),
+            nn.Dropout(config["fc_dropout"]),
             nn.ReLU(),
             nn.Linear(config["fc_hidden_dim"],
                       config["num_class"])
@@ -85,8 +76,10 @@ class Parser(nn.Module):
 
     def forward(self, span_representations):
         span_label_scores = self.feedforward(span_representations)
+        batch_size, no_constiutuents, _ = span_label_scores.size()
+        zeros = torch.zeros((batch_size,no_constiutuents, 1))
+        span_label_scores = torch.cat((span_label_scores, zeros), dim=2) # Adding 0 vektor for "no constituent" class
         return span_label_scores
-
 
 def main():
     config = {"num_suffixes": 500,
@@ -96,9 +89,10 @@ def main():
               "span_encoder_hidden_dim": 200,
               "word_encoder_lstm_dropout": 0.1,
               "span_encoder_lstm_dropout": 0.1,
-              "batch_size": 32,
+              "fc_dropout": 0.1,
               "fc_hidden_dim": 32,
-              "num_class": 10
+              "num_class": 10,
+              "batch_size": 32,
               }
 
     test_sequence = "This is a wonderful test sentence which will be processed by the LSTM ."
@@ -113,6 +107,7 @@ def main():
     span_repr = span_encoder(word_repr)
     parser = Parser(config)
     scores = parser(span_repr)
+    s = 0
 
 if __name__=="__main__":
     main()
