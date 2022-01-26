@@ -1,4 +1,0 @@
-Oma
-Kamera
-Maracuja
-Hydra
