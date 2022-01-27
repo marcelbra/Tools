@@ -1,113 +1,118 @@
 """
-P7 Tools - Aufgabe 10
-
+P7 Tools - Aufgabe 11
 Group:
 Marcel Braasch
 Nadja Seeberg
 Sinem Kühlewind
 """
-
-import argparse
 import pickle
 
-import torch
-import torch.nn as nn
-from torch.nn import LSTM
+from parser import Parser, WordEncoder, SpanEncoder
 from Data import Data
+from parser import Parser
+import random
+import torch.nn as nn
+import torch
+import torch.optim as optim
+from torch.utils.data import Dataset, DataLoader
 
 
-class WordEncoder(nn.Module):
+class Trainer:
 
-    def __init__(self, config):
-        super().__init__()
-        self.embedding_layer = nn.Embedding(num_embeddings=config["num_chars"],
-                                            embedding_dim=config["embeddings_dim"])
-        self.dropout = nn.Dropout(p=config["dropout"])
-        self.forward_lstm = nn.LSTM(batch_first=True,
-                                    input_size=config["embeddings_dim"],
-                                    hidden_size=config["word_encoder_hidden_dim"])
-        self.backward_lstm = nn.LSTM(batch_first=True,
-                                     input_size=config["embeddings_dim"],
-                                     hidden_size=config["word_encoder_hidden_dim"])
+    def __init__(self, path_train, path_dev, path_test, config):
+        self.path_train = path_train
+        self.path_dev = path_dev
+        self.path_test = path_test
+        self.config = config
+        self.train = True
 
-    def forward(self, prefixes, suffixes):
-        prefixes = self.embedding_layer(prefixes)
-        suffixes = self.embedding_layer(suffixes)
-        prefixes = self.dropout(prefixes)
-        suffixes = self.dropout(suffixes)
-        prefix_repr, _ = self.forward_lstm(prefixes)
-        suffix_repr, _ = self.backward_lstm(suffixes)
-        word_representation = torch.cat((suffix_repr[:,-1,:], prefix_repr[:,-1,:]), dim=1)
-        word_representation = self.dropout(word_representation)
-        return word_representation
+    def load_data(self, path_train, path_dev):
+        try:
+            with open("data.pkl", "rb") as handle:
+                return pickle.load(handle)
+        except:
+            return Data(path_train, path_dev)
 
-class SpanEncoder(nn.Module):
-    def __init__(self, config):
-        super().__init__()
-        self.bi_lstm = LSTM(batch_first=True,
-                            bidirectional=True,
-                            input_size=config["word_encoder_hidden_dim"]*2, # Because we concatenated
-                            hidden_size=config["span_encoder_hidden_dim"])
+    def do_train(self, model):
+        #model.train() if optimizer else model.eval()
+        optimizer = config["optimizer"](params=model.parameters(), lr=config["lr"])
+        loss_func = nn.CrossEntropyLoss()
+        epochs = self.config["epochs"]
+        data = self.load_data(path_train, path_dev)
 
-    def forward(self, word_representation):
-        sent_length, repr_size = word_representation.size()
-        zeros = torch.zeros((1, repr_size))
-        padded_word_repr = torch.cat((zeros, word_representation, zeros), dim=0).unsqueeze(0)
-        spans, _ = self.bi_lstm(padded_word_repr)
-        forward, backward = torch.split(spans.squeeze(0), repr_size, 1)
-        forward, backward = forward[:-1], backward[1:]
-        span_reprs = [torch.cat((forward[l:] - forward[:-l],
-                                 backward[:-l] - backward[l]), -1)
-                      for l in range(1, sent_length)]
-        span_reprs = torch.cat(span_reprs)
-        return span_reprs
+        for n in range(epochs):
+            random.shuffle(data.train_parses)
+            wrong, loss = self.do_epoch(model, loss_func, optimizer, data)
 
-class Parser(nn.Module):
+    def do_epoch(self, model, loss_func, optimizer, data):
+        for sample in data.train_parses:
+            wrong, loss = self.do_step(model, loss_func, optimizer, sample, data)
 
-    def __init__(self, config):
-        super().__init__()
-        self.word_encoder = WordEncoder(config)
-        self.span_encoder = SpanEncoder(config)
-        self.feedforward = nn.Sequential(
-            nn.Linear(config["span_encoder_hidden_dim"]*2,
-                      config["fc_hidden_dim"]),
-            nn.Dropout(config["fc_dropout"]),
-            nn.ReLU(),
-            nn.Linear(config["fc_hidden_dim"],
-                      config["num_class"])
-        )
+    def do_step(self, model, loss_func, optimizer, sample, data):
+        words, constituents = sample
+        suffix, prefix = data.words2charIDvec(words)
+        suffix, prefix = torch.Tensor(suffix).to(torch.int64), torch.Tensor(prefix).to(torch.int64)
+        targets = self.get_targets(words, constituents, data).type(torch.LongTensor)
+        logits = model(prefix, suffix)
+        loss = loss_func(logits, targets)
+        if self.train:
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+        return 100, loss
 
-    def forward(self, prefix_ids, suffix_ids):
-        word_repr = self.word_encoder(prefix_ids, suffix_ids)
-        span_repr = self.span_encoder(word_repr)
-        span_label_scores = self.feedforward(span_repr)
-        # batch_size, no_constiutuents = span_label_scores.size()
-        # zeros = torch.zeros((batch_size,no_constiutuents, 1))
-        # span_label_scores = torch.cat((span_label_scores, zeros), dim=2) # Adding 0 vektor for "no constituent" class
-        return span_label_scores
+    def get_targets(self, words, constituents, data):
+        # Build labels vector
+        label_vector = []
+        for i in range(1, len(words) + 1):
+            label_vector.extend([i] * (len(words) - i + 1))
 
-# config = {"num_chars": 500,
-#           "num_class": 10,
-#           "embeddings_dim": 100,
-#           "word_encoder_hidden_dim": 100,
-#           "span_encoder_hidden_dim": 200,
-#           "word_encoder_lstm_dropout": 0.1,
-#           "span_encoder_lstm_dropout": 0.1,
-#           "fc_dropout": 0.1,
-#           "fc_hidden_dim": 32,
-#           "batch_size": 32,
-#           "lr": 1e-3,
-#           "dropout": 0.1
-#           }
-#
-# with open("data.pkl", "rb") as handle:
-#     data = pickle.load(handle)
-#
-# parser = Parser(config)
-#
-# sample = data.train_parses[0]
-# suffix_tensor, prefix_tensor = data.words2charIDvec(sample[0])
-# suffix_tensor = torch.Tensor(suffix_tensor).to(torch.int64)
-# prefix_tensor = torch.Tensor(prefix_tensor).to(torch.int64)
-# parser(suffix_tensor, prefix_tensor)
+        # Save index and label of respective constituent
+        consts = []
+        labels = []
+        for constituent in constituents:
+            label, start, end = constituent
+            consts.append(label_vector.index(end - start) + start)
+            labels.append(label)
 
+        # Add label ID if it is a constituent else 0
+        for i in range(len(label_vector)):
+            if i in consts:
+                label = labels[consts.index(i)]
+                label_vector[i] = data.labelID(label)
+            else:
+                label_vector[i] = 0
+
+        return torch.Tensor(label_vector)
+
+
+
+
+config = {"num_chars": 1000,
+          "num_class": 10,
+          "embeddings_dim": 100,
+          "word_encoder_hidden_dim": 100,
+          "span_encoder_hidden_dim": 200,
+          "word_encoder_lstm_dropout": 0.1,
+          "span_encoder_lstm_dropout": 0.1,
+          "fc_dropout": 0.1,
+          "fc_hidden_dim": 32,
+          "batch_size": 32,
+          "optimizer": optim.SGD,
+          "lr": 1e-3,
+          "epochs": 50,
+          "dropout": 0.2
+          }
+
+path_train = "../Aufgabe 08/PennTreebank/train.txt"
+path_dev = "../Aufgabe 08/PennTreebank/dev.txt"
+path_test = "../Aufgabe 08/PennTreebank/test.txt.txt"
+
+model = Parser(config=config)
+
+trainer = Trainer(path_train=path_train,
+                  path_dev=path_dev,
+                  path_test=path_test,
+                  config=config)
+
+trainer.do_train(model)
