@@ -66,6 +66,8 @@ class SpanEncoder(nn.Module):
 class Parser(nn.Module):
     def __init__(self, config):
         super().__init__()
+        self.word_encoder = WordEncoder(config)
+        self.span_encoder = SpanEncoder(config)
         self.feedforward = nn.Sequential(
             nn.Linear(config["span_encoder_hidden_dim"]*2,
                       config["fc_hidden_dim"]),
@@ -75,24 +77,11 @@ class Parser(nn.Module):
                       config["num_class"])
         )
 
-    def forward(self, span_representations):
+    def forward(self, prefix_ids, suffix_ids):
+        word_repr = self.word_encoder(prefix_ids, suffix_ids)
+        span_repr = self.span_encoder(word_repr)
         span_label_scores = self.feedforward(span_representations)
         batch_size, no_constiutuents, _ = span_label_scores.size()
         zeros = torch.zeros((batch_size,no_constiutuents, 1))
         span_label_scores = torch.cat((span_label_scores, zeros), dim=2) # Adding 0 vektor for "no constituent" class
         return span_label_scores
-
-def main():
-
-    test_sequence = "This is a wonderful test sentence which will be processed by the LSTM ."
-    prefix_ids = torch.Tensor([list(range(len(test_sequence.split())))
-                               for _ in range(config["batch_size"])])
-    suffix_ids = torch.Tensor([list(range(len(test_sequence.split())))[::-1]
-                               for _ in range(config["batch_size"])])
-
-    word_encoder = WordEncoder(config)
-    word_repr = word_encoder(prefix_ids, suffix_ids)
-    span_encoder = SpanEncoder(config)
-    span_repr = span_encoder(word_repr)
-    parser = Parser(config)
-    scores = parser(span_repr)
