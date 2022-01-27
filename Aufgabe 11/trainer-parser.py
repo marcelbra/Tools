@@ -115,5 +115,5 @@ trainer = Trainer(path_train=path_train,
                   path_test=path_test,
                   config=config)
 
-trainer.do_train(model)
+trainer.do_train(model) #
 

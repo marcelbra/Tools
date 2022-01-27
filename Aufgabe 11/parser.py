@@ -48,7 +48,7 @@ class SpanEncoder(nn.Module):
                             bidirectional=True,
                             input_size=config["word_encoder_hidden_dim"]*2, # Because we concatenated
                             hidden_size=config["span_encoder_hidden_dim"])
-
+#
     def forward(self, word_representation):
         sent_length, repr_size = word_representation.size()
         zeros = torch.zeros((1, repr_size))
