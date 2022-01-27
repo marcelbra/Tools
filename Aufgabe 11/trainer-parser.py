@@ -24,6 +24,7 @@ class Trainer:
         self.path_dev = path_dev
         self.path_test = path_test
         self.config = config
+        self.train = True
 
     def load_data(self, path_train, path_dev):
         try:
@@ -32,48 +33,62 @@ class Trainer:
         except:
             return Data(path_train, path_dev)
 
-    def train(self, model):
+    def do_train(self, model):
+        #model.train() if optimizer else model.eval()
         optimizer = config["optimizer"](params=model.parameters(), lr=config["lr"])
         loss_func = nn.CrossEntropyLoss()
         epochs = self.config["epochs"]
         data = self.load_data(path_train, path_dev)
+
         for n in range(epochs):
             random.shuffle(data.train_parses)
-            acc, loss = self.do_epoch(model, loss_func, optimizer, data)
+            wrong, loss = self.do_epoch(model, loss_func, optimizer, data)
 
-    def do_epoch(self, model, loss, optimizer, data):
+    def do_epoch(self, model, loss_func, optimizer, data):
         for sample in data.train_parses:
-            acc, loss = self.loss(model, loss, optimizer, sample, data)
+            wrong, loss = self.do_step(model, loss_func, optimizer, sample, data)
 
-
-    def loss(self, model, loss, optimizer, sample, data):
-
-        words, consituents = sample
+    def do_step(self, model, loss_func, optimizer, sample, data):
+        words, constituents = sample
         suffix, prefix = data.words2charIDvec(words)
+        suffix, prefix = torch.Tensor(suffix).to(torch.int64), torch.Tensor(prefix).to(torch.int64)
+        targets = self.get_targets(words, constituents, data).type(torch.LongTensor)
         logits = model(prefix, suffix)
-
-        label_vector = []
-        len_counter = len(sentence)
-        for i in range(1, len(sentence) + 1):
-            label_vector.extend([i] * len_counter)
-            len_counter -= 1
-            for const in constituents:
-                span_length = const[2] - const[1]
-                vector_ix = label_vector.index(span_length) + const[1]
-                label_vector[vector_ix] = self.data.labelID(const[0])
-
-                #TODO: Berechnung num_errors
-
-            loss = loss_func(label_vector, span_label_scores) # input für loss function?
+        loss = loss_func(logits, targets)
+        if self.train:
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-    #
-    #     return None
+        return 100, loss
+
+    def get_targets(self, words, constituents, data):
+        # Build labels vector
+        label_vector = []
+        for i in range(1, len(words) + 1):
+            label_vector.extend([i] * (len(words) - i + 1))
+
+        # Save index and label of respective constituent
+        consts = []
+        labels = []
+        for constituent in constituents:
+            label, start, end = constituent
+            consts.append(label_vector.index(end - start) + start)
+            labels.append(label)
+
+        # Add label ID if it is a constituent else 0
+        for i in range(len(label_vector)):
+            if i in consts:
+                label = labels[consts.index(i)]
+                label_vector[i] = data.labelID(label)
+            else:
+                label_vector[i] = 0
+
+        return torch.Tensor(label_vector)
 
 
-config = {"num_suffixes": 500,
-          "num_prefixes": 500,
+
+
+config = {"num_chars": 1000,
           "num_class": 10,
           "embeddings_dim": 100,
           "word_encoder_hidden_dim": 100,
@@ -85,7 +100,8 @@ config = {"num_suffixes": 500,
           "batch_size": 32,
           "optimizer": optim.SGD,
           "lr": 1e-3,
-          "epochs": 50
+          "epochs": 50,
+          "dropout": 0.2
           }
 
 path_train = "../Aufgabe 08/PennTreebank/train.txt"
@@ -99,14 +115,5 @@ trainer = Trainer(path_train=path_train,
                   path_test=path_test,
                   config=config)
 
-trainer.train(model)
-
-# test_sequence = "This is a wonderful test sentence which will be processed by the LSTM ."
-# prefix_ids = torch.Tensor([list(range(len(test_sequence.split())))
-#                            for _ in range(config["batch_size"])])
-# suffix_ids = torch.Tensor([list(range(len(test_sequence.split())))[::-1]
-#                            for _ in range(config["batch_size"])])
-
-
-#class FullParser(WordEncoder, SpanEncoder, Parser):
+trainer.do_train(model)
 
