@@ -5,69 +5,90 @@ Marcel Braasch
 Nadja Seeberg
 Sinem Kühlewind
 """
+import pickle
 
 from parser import Parser, WordEncoder, SpanEncoder
 from Data import Data
+from parser import Parser
 import random
 import torch.nn as nn
 import torch
 import torch.optim as optim
+from torch.utils.data import Dataset, DataLoader
 
 
 class Trainer:
 
-    def __init__(self, path_train, path_dev, path_test, model):
+    def __init__(self, path_train, path_dev, path_test, config):
         self.path_train = path_train
         self.path_dev = path_dev
         self.path_test = path_test
-        self.data = Data(path_train, path_dev)
-        self.model = model
+        self.config = config
+        self.train = True
 
-    def train(self):
-        num_epochs = 50
+    def load_data(self, path_train, path_dev):
+        try:
+            with open("data.pkl", "rb") as handle:
+                return pickle.load(handle)
+        except:
+            return Data(path_train, path_dev)
 
-        for n in range(num_epochs):
-            random.shuffle(self.data.train_parses)
-            for sample in self.data:
-                words = sample[0]
-                suffix_tensor, prefix_tensor = self.data.words2charIDvec(words)
-                word_encoder = WordEncoder(config)
-                word_repr = word_encoder(prefix_ids, suffix_tensor)
-                span_encoder = SpanEncoder(config)
-                span_repr = span_encoder(word_repr)
-                parser = Parser(config)
-                scores = parser(span_repr)
-
-    def loss(self, prefixes, suffixes, constituents):
-        optimizer = config["optimizer"](params=model.parameters(), lr=config["lr"], )
-        span_label_scores = Parser()
+    def do_train(self, model):
+        #model.train() if optimizer else model.eval()
+        optimizer = config["optimizer"](params=model.parameters(), lr=config["lr"])
         loss_func = nn.CrossEntropyLoss()
+        epochs = self.config["epochs"]
+        data = self.load_data(path_train, path_dev)
 
-        for sentence_constituent_pair in self.data.train_parses:
-            sentence = sentence_constituent_pair[0]
-            constituents = sentence_constituent_pair[1]
-            label_vector = []
-            len_counter = len(sentence)
-            for i in range(1, len(sentence) + 1):
-                label_vector.extend([i] * len_counter)
-                len_counter -= 1
-                for const in constituents:
-                    span_length = const[2] - const[1]
-                    vector_ix = label_vector.index(span_length) + const[1]
-                    label_vector[vector_ix] = self.data.labelID(const[0])
+        for n in range(epochs):
+            random.shuffle(data.train_parses)
+            wrong, loss = self.do_epoch(model, loss_func, optimizer, data)
 
-                #TODO: Berechnung num_errors
+    def do_epoch(self, model, loss_func, optimizer, data):
+        for sample in data.train_parses:
+            wrong, loss = self.do_step(model, loss_func, optimizer, sample, data)
 
-            loss = loss_func(label_vector, span_label_scores) # input für loss function?
+    def do_step(self, model, loss_func, optimizer, sample, data):
+        words, constituents = sample
+        suffix, prefix = data.words2charIDvec(words)
+        suffix, prefix = torch.Tensor(suffix).to(torch.int64), torch.Tensor(prefix).to(torch.int64)
+        targets = self.get_targets(words, constituents, data).type(torch.LongTensor)
+        logits = model(prefix, suffix)
+        loss = loss_func(logits, targets)
+        if self.train:
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+        return 100, loss
 
-        return None
+    def get_targets(self, words, constituents, data):
+        # Build labels vector
+        label_vector = []
+        for i in range(1, len(words) + 1):
+            label_vector.extend([i] * (len(words) - i + 1))
+
+        # Save index and label of respective constituent
+        consts = []
+        labels = []
+        for constituent in constituents:
+            label, start, end = constituent
+            consts.append(label_vector.index(end - start) + start)
+            labels.append(label)
+
+        # Add label ID if it is a constituent else 0
+        for i in range(len(label_vector)):
+            if i in consts:
+                label = labels[consts.index(i)]
+                label_vector[i] = data.labelID(label)
+            else:
+                label_vector[i] = 0
+
+        return torch.Tensor(label_vector)
 
 
-config = {"num_suffixes": 500,
-          "num_prefixes": 500,
+
+
+config = {"num_chars": 1000,
           "num_class": 10,
           "embeddings_dim": 100,
           "word_encoder_hidden_dim": 100,
@@ -77,8 +98,10 @@ config = {"num_suffixes": 500,
           "fc_dropout": 0.1,
           "fc_hidden_dim": 32,
           "batch_size": 32,
-          "optimizer": "optim.SGD",
-          "lr": "1e-3"
+          "optimizer": optim.SGD,
+          "lr": 1e-3,
+          "epochs": 50,
+          "dropout": 0.2
           }
 
 path_train = "../Aufgabe 08/PennTreebank/train.txt"
@@ -89,15 +112,8 @@ model = Parser(config=config)
 
 trainer = Trainer(path_train=path_train,
                   path_dev=path_dev,
-                  path_test=path_test)
+                  path_test=path_test,
+                  config=config)
 
-test_sequence = "This is a wonderful test sentence which will be processed by the LSTM ."
-prefix_ids = torch.Tensor([list(range(len(test_sequence.split())))
-                           for _ in range(config["batch_size"])])
-suffix_ids = torch.Tensor([list(range(len(test_sequence.split())))[::-1]
-                           for _ in range(config["batch_size"])])
-
-
-#class FullParser(WordEncoder, SpanEncoder, Parser):
-
+trainer.do_train(model) #
 
