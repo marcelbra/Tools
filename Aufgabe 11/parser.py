@@ -46,15 +46,20 @@ class SpanEncoder(nn.Module):
         super().__init__()
         self.bi_lstm = LSTM(batch_first=True,
                             bidirectional=True,
+                            num_layers=config["span_encoder_num_layers"],
                             input_size=config["word_encoder_hidden_dim"]*2, # Because we concatenated
-                            hidden_size=config["span_encoder_hidden_dim"])
-#
+                            hidden_size=config["span_encoder_hidden_dim"],
+                            dropout=config["dropout"])
+        self.dropout = nn.Dropout(p=config["dropout"])
+
+
     def forward(self, word_representation):
         sent_length, repr_size = word_representation.size()
         zeros = torch.zeros((1, repr_size)).to(device)
         padded_word_repr = torch.cat((zeros, word_representation, zeros), dim=0).unsqueeze(0)
+        padded_word_repr = self.dropout(padded_word_repr)
         spans, _ = self.bi_lstm(padded_word_repr)
-        forward, backward = torch.split(spans.squeeze(0), int(repr_size / 2), 1)
+        forward, backward = torch.split(spans.squeeze(0), int(spans.size()[-1] / 2), 1)
         forward, backward = forward[:-1], backward[1:]
         span_reprs = [torch.cat((forward[l:] - forward[:-l],
                                  backward[:-l] - backward[l:]), -1)
@@ -83,3 +88,4 @@ class Parser(nn.Module):
         span_label_scores = self.feedforward(span_repr)
         return span_label_scores
 
+#
