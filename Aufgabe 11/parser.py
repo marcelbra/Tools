@@ -9,12 +9,12 @@ Sinem Kühlewind
 
 import argparse
 import pickle
-
 import torch
 import torch.nn as nn
 from torch.nn import LSTM
 from Data import Data
 
+device = "cuda:0" if torch.cuda.is_available() else "cpu"
 
 class WordEncoder(nn.Module):
 
@@ -51,14 +51,14 @@ class SpanEncoder(nn.Module):
 #
     def forward(self, word_representation):
         sent_length, repr_size = word_representation.size()
-        zeros = torch.zeros((1, repr_size))
+        zeros = torch.zeros((1, repr_size)).to(device)
         padded_word_repr = torch.cat((zeros, word_representation, zeros), dim=0).unsqueeze(0)
         spans, _ = self.bi_lstm(padded_word_repr)
-        forward, backward = torch.split(spans.squeeze(0), repr_size, 1)
+        forward, backward = torch.split(spans.squeeze(0), int(repr_size / 2), 1)
         forward, backward = forward[:-1], backward[1:]
         span_reprs = [torch.cat((forward[l:] - forward[:-l],
-                                 backward[:-l] - backward[l]), -1)
-                      for l in range(1, sent_length)]
+                                 backward[:-l] - backward[l:]), -1)
+                      for l in range(1, sent_length + 1)]
         span_reprs = torch.cat(span_reprs)
         return span_reprs
 
@@ -71,7 +71,7 @@ class Parser(nn.Module):
         self.feedforward = nn.Sequential(
             nn.Linear(config["span_encoder_hidden_dim"]*2,
                       config["fc_hidden_dim"]),
-            nn.Dropout(config["fc_dropout"]),
+            nn.Dropout(config["dropout"]),
             nn.ReLU(),
             nn.Linear(config["fc_hidden_dim"],
                       config["num_class"])
@@ -81,33 +81,5 @@ class Parser(nn.Module):
         word_repr = self.word_encoder(prefix_ids, suffix_ids)
         span_repr = self.span_encoder(word_repr)
         span_label_scores = self.feedforward(span_repr)
-        # batch_size, no_constiutuents = span_label_scores.size()
-        # zeros = torch.zeros((batch_size,no_constiutuents, 1))
-        # span_label_scores = torch.cat((span_label_scores, zeros), dim=2) # Adding 0 vektor for "no constituent" class
         return span_label_scores
-
-# config = {"num_chars": 500,
-#           "num_class": 10,
-#           "embeddings_dim": 100,
-#           "word_encoder_hidden_dim": 100,
-#           "span_encoder_hidden_dim": 200,
-#           "word_encoder_lstm_dropout": 0.1,
-#           "span_encoder_lstm_dropout": 0.1,
-#           "fc_dropout": 0.1,
-#           "fc_hidden_dim": 32,
-#           "batch_size": 32,
-#           "lr": 1e-3,
-#           "dropout": 0.1
-#           }
-#
-# with open("data.pkl", "rb") as handle:
-#     data = pickle.load(handle)
-#
-# parser = Parser(config)
-#
-# sample = data.train_parses[0]
-# suffix_tensor, prefix_tensor = data.words2charIDvec(sample[0])
-# suffix_tensor = torch.Tensor(suffix_tensor).to(torch.int64)
-# prefix_tensor = torch.Tensor(prefix_tensor).to(torch.int64)
-# parser(suffix_tensor, prefix_tensor)
 

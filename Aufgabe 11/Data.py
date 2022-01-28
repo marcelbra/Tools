@@ -1,6 +1,7 @@
 
 import sys
 from collections import Counter
+import torch
 import pickle
 import numpy
 
@@ -110,7 +111,7 @@ class Data(object):
       return fwd_charIDs, bwd_charIDs
 
 
-   def words2charIDvec(self, words):
+   def words2charIDvec(self, words, device):
       """ converts a sequence of words to a suffix letter matrix
           and a prefix letter matrix """
       fwd_charID_seqs = []
@@ -120,9 +121,8 @@ class Data(object):
          fwd_charID_seqs.append(fwd_charIDs)
          bwd_charID_seqs.append(bwd_charIDs)
 
-      fwd_charID_seqs = numpy.asarray(fwd_charID_seqs, dtype='int32')
-      bwd_charID_seqs = numpy.asarray(bwd_charID_seqs, dtype='int32')
-
+      fwd_charID_seqs = torch.Tensor(fwd_charID_seqs).to(torch.int64).to(device)
+      bwd_charID_seqs = torch.Tensor(bwd_charID_seqs).to(torch.int64).to(device)
       return fwd_charID_seqs, bwd_charID_seqs
 
 
