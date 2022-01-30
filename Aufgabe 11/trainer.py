@@ -3,7 +3,6 @@ from utils import get_targets, load_data, save_errors
 from Data import Data
 
 from collections import defaultdict, Counter
-from tqdm import tqdm
 import pickle
 import random
 
@@ -25,7 +24,7 @@ class Trainer:
 
     def train(self, model, data):
 
-        optimizer = self.config["optimizer"](params=model.parameters())
+        optimizer = self.config["optimizer"](params=model.parameters(), lr=self.config["lr"])
         loss_func = nn.CrossEntropyLoss()
         model.to(self.device)
         metrics = defaultdict(list)
@@ -63,9 +62,8 @@ class Trainer:
             random.shuffle(curr_dataset)
 
         epoch_metrics = Counter()
-        for sample in tqdm(curr_dataset, position=0, leave=True):
-        # for sample in curr_dataset:
-                epoch_metrics += self.do_step(model, sample, data, loss_func, optimizer)
+        for sample in curr_dataset:
+            epoch_metrics += self.do_step(model, sample, data, loss_func, optimizer)
 
         return epoch_metrics
 
@@ -87,5 +85,3 @@ class Trainer:
         wrong = len(targets) - correct
 
         return Counter({"correct": correct, "wrong": wrong, "loss": float(loss)})
-
-#

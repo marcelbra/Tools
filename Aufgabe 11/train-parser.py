@@ -12,7 +12,6 @@ from Data import Data
 from parser import Parser
 from utils import load_data
 from torch import optim
-from tqdm import tqdm
 import os
 
 def main():
@@ -35,12 +34,13 @@ def main():
                     "num_class": len(data.label2ID),
                     "embeddings_dim": 100,
                     "word_encoder_hidden_dim": 100,
-                    "span_encoder_hidden_dim": 250,
-                    "fc_hidden_dim": 250,
-                    "dropout": 0.4,
-                    "span_encoder_num_layers": 2}
+                    "span_encoder_hidden_dim": 100,
+                    "fc_hidden_dim": 32,
+                    "dropout": 0.1,}
 
-    optimizer_config = {"optimizer": optim.Adam}
+    optimizer_config = {"optimizer": optim.Adam,
+                        "lr": 1e-3,
+                        "weight_decay": 0.01}
 
     model = Parser(config=model_config)
     trainer = Trainer(paths=paths, epochs=50, config=optimizer_config)#, debug=True)
@@ -49,5 +49,3 @@ def main():
 if __name__=="__main__":
     main()
 
-
-#
