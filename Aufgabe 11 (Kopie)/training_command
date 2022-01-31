@@ -1,9 +1,0 @@
-python3 train-parser \
-    --embeddings_dim \
-    --word_encoder_hidden_dim \
-    --span_encoder_hidden_dim \
-    --fc_hidden_dim \
-    --dropout \
-    --span_encoder_num_layers \
-    --optimizer \
-    --lr \
