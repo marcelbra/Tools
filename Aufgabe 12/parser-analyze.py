@@ -28,16 +28,27 @@ class Analyzer:
 
     def parse(self):
         label_scores = {}
-        vscore = {}
+        vscores = {}
 
         sample = self.test_data[0]
         suffix, prefix = self.data_class.words2charIDvec(sample, self.device)
+        scores = self.model(prefix, suffix)
+        print(scores.size())
         span_label_scores = torch.argmax(self.model(prefix, suffix), dim=1)
         n = len(sample)
         for l in range(1, n-1):
             for i in range(n-l):
                 k = i + l
-                label_scores[(i, k)] = span_label_scores[i]
+                label_scores[i, k] = span_label_scores[i]
+                vscores[i, k] = scores[i, label_scores[i, k]] # stimmt das von der Dimension her?
+                if l > 1:
+                    pass
+
+
+
+
+
+        print(vscores)
 
 
 analyzer_config = {"model_config_path": "./Run-5/configs.txt",
