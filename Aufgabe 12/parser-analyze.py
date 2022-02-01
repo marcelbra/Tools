@@ -44,13 +44,6 @@ class Analyzer:
                 if l > 1:
                     pass
 
-
-
-
-
-        print(vscores)
-
-
 analyzer_config = {"model_config_path": "./Run-5/configs.txt",
                    "model_path": "./Run-5/model.pt",
                    "test_file_path": "./PennTreebank/test.txt",
