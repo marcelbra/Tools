@@ -18,7 +18,7 @@ class Analyzer:
         # Load model
         model_config = load_config(config["model_config_path"])
         model_path = config["model_path"]
-        self.model = torch.load(model_path)
+        self.model = torch.load(model_path, map_location='cpu')
         self.model.to(self.device)
         self.model.eval()
 
@@ -27,14 +27,18 @@ class Analyzer:
         self.data_class = load_data(config["data_path"])
 
     def parse(self):
+        label_scores = {}
+        vscore = {}
+
         sample = self.test_data[0]
         suffix, prefix = self.data_class.words2charIDvec(sample, self.device)
         span_label_scores = torch.argmax(self.model(prefix, suffix), dim=1)
         n = len(sample)
-        for l in range(1, n):
-            for i in range(n-l+1):
-                for label in self.data_class.ID2label:
-                    pass
+        for l in range(1, n-1):
+            for i in range(n-l):
+                k = i + l
+                label_scores[(i, k)] = span_label_scores[i]
+
 
 analyzer_config = {"model_config_path": "./Run-5/configs.txt",
                    "model_path": "./Run-5/model.pt",
