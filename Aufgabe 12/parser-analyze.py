@@ -18,7 +18,7 @@ class Analyzer:
         # Load model
         model_config = load_config(config["model_config_path"])
         model_path = config["model_path"]
-        self.model = torch.load(model_path)
+        self.model = torch.load(model_path, map_location='cpu')
         self.model.to(self.device)
         self.model.eval()
 
@@ -35,9 +35,8 @@ class Analyzer:
         best_labels = [self.data_class.ID2label[i] for i in argmax_label_ids]
         best_scores = torch.max(logits, dim=1)[0]
         n = len(sample)
-        constituent_index = 0#n
-        max_index = len(best_labels)
-        split = [0] * max_index
+        #max_index = len(best_labels)
+        #split = [0] * max_index
         labels_vector = build_labels_vector(n)
 
         for l in range(1, n):
@@ -57,7 +56,6 @@ class Analyzer:
                             if new_score > best_score:
                                 best_score = new_score
                                 best_indices = (i, k)
-
 
 
 analyzer_config = {"model_config_path": "./Run-5/configs.txt",
