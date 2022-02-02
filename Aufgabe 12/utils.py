@@ -24,3 +24,9 @@ def load_data(path):
         # with open(paths["path_data"], "wb") as handle:
         #      pickle.dump(data, handle, protocol=pickle.HIGHEST_PROTOCOL)
         # return data
+
+def build_labels_vector(n):
+    label_vector = []
+    for i in range(1, n + 1):
+        label_vector.extend([i] * (n- i + 1))
+    return label_vector
