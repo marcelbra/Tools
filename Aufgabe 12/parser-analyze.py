@@ -22,7 +22,7 @@ class Printer:
         # if self.labels[self.index(i, k)] != "<unk>":
         print(f"({self.labels[self.index(i, k)]}", end="")
         if k==i+1:
-            print(f" {self.sentence[i]}", end="")#
+            print(f" {self.sentence[i]}", end="")
         else:
             spit_index = self.splits[self.index(i,k)]
             self.output(i, spit_index)
@@ -37,7 +37,7 @@ class Analyzer:
         self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
         model_config = load_config(config["model_config_path"])
         model_path = config["model_path"]
-        self.model = torch.load(model_path, map_location='cpu')
+        self.model = torch.load(model_path, map_location=self.device)
         self.model.to(self.device)
         self.model.eval()
 
@@ -47,33 +47,29 @@ class Analyzer:
 
     def parse(self, sentence):
 
-        sentence = self.test_data[3]
+        o = 0
+
+        sentence = self.test_data[o]
         inputs = self.data_class.words2charIDvec(sentence, self.device)
         logits = self.model(*inputs)
         labels = [self.data_class.ID2label[i] for i in torch.argmax(logits, dim=1)]
         scores = torch.max(logits, dim=1)[0]
-        splits = [0] * len(labels)
+        splits = [""] * len(labels)
         n = len(sentence)
         index = Index(n)
 
         for l in range(2, n + 1):
             for i in range(n - l + 1):
 
-                # Compute the best new score and argmax j
-                k, best_score, best_j = i + l, float("-inf"), None
-                for j in range(i + 1, k):
-                    new_score = scores[index(i, j)] + scores[index(j, k)]
-                    if new_score > best_score:
-                        best_score = new_score
-                        best_j = j
-
-                # Update score and save the best split index j
-                scores[index(i, k)] += scores[index(i, best_j)] + scores[index(best_j, k)]
-                splits[index(i,k)] = best_j
+                k = i + l
+                all_splits = [float(scores[index(i, j)] + scores[index(j, k)]) for j in range(i + 1, k)]
+                argmax_j = i + all_splits.index(max(all_splits)) + 1
+                scores[index(i, k)] += scores[index(i, argmax_j)] + scores[index(argmax_j, k)]
+                splits[index(i,k)] = argmax_j
 
         printer = Printer(labels, splits, index, sentence)
         printer.output(0, n)
-        print(f"\n{self.trees[3]}")
+        print(f"\n{self.trees[o]}")
 
 analyzer_config = {"model_config_path": "./Run-5/configs.txt",
                    "model_path": "./Run-5/model.pt",
