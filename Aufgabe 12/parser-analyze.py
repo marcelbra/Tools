@@ -21,13 +21,14 @@ class Printer:
     def output(self, i, k):
         # if self.labels[self.index(i, k)] != "<unk>":
         print(f"({self.labels[self.index(i, k)]}", end="")
-        if k==i+1:
+        if k == i + 1:
             print(f" {self.sentence[i]}", end="")
         else:
-            spit_index = self.splits[self.index(i,k)]
+            spit_index = self.splits[self.index(i, k)]
             self.output(i, spit_index)
             self.output(spit_index, k)
         print(")", end="")
+
 
 class Analyzer:
 
@@ -47,12 +48,14 @@ class Analyzer:
 
     def parse(self, sentence):
 
+        data = Data(analyzer_config["data_params_path"])
+
         o = 0
 
-        sentence = self.test_data[o]
-        inputs = self.data_class.words2charIDvec(sentence, self.device)
+        sentence = self.test_data[85]
+        inputs = data.words2charIDvec(sentence, self.device)
         logits = self.model(*inputs)
-        labels = [self.data_class.ID2label[i] for i in torch.argmax(logits, dim=1)]
+        labels = [data.ID2label[i] for i in torch.argmax(logits, dim=1)]
         scores = torch.max(logits, dim=1)[0]
         splits = [""] * len(labels)
         n = len(sentence)
@@ -60,21 +63,21 @@ class Analyzer:
 
         for l in range(2, n + 1):
             for i in range(n - l + 1):
-
                 k = i + l
                 all_splits = [float(scores[index(i, j)] + scores[index(j, k)]) for j in range(i + 1, k)]
                 argmax_j = i + all_splits.index(max(all_splits)) + 1
                 scores[index(i, k)] += scores[index(i, argmax_j)] + scores[index(argmax_j, k)]
-                splits[index(i,k)] = argmax_j
+                splits[index(i, k)] = argmax_j
 
         printer = Printer(labels, splits, index, sentence)
         printer.output(0, n)
         print(f"\n{self.trees[o]}")
 
-analyzer_config = {"model_config_path": "./Run-5/configs.txt",
-                   "model_path": "./Run-5/model.pt",
-                   "test_file_path": "./PennTreebank/test.txt",
-                   "data_params_path": "./data_params.pkl",
+
+analyzer_config = {"model_config_path": "./Run-6/configs.txt",
+                   "model_path": "./Run-6/model.pt",
+                   "test_file_path": "./PennTreebank/train.txt",
+                   "data_params_path": "./Run-6/parameters.pkl",
                    "data_path": "./PennTreebank/data.pkl"}
 
 analyzer = Analyzer(analyzer_config)
