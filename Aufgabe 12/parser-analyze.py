@@ -39,6 +39,7 @@ class Printer:
             self.build_parse(split_index, k)
         print(")" * number_closing, end="")
 
+
 class Analyzer:
 
     def __init__(self, paths):
@@ -84,5 +85,5 @@ def main():
         analyzer.parse(sys.argv[1])
     else:
         analyzer.parse(None)
-
+       
 main()
