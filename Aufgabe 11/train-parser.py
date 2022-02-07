@@ -31,7 +31,7 @@ def main():
              "path_errors": path_output + "errors.txt",
              "path_configs": path_output + "configs.txt"}
 
-    # Data set -up
+    # Data set-up
     data = load_data(paths=paths)
 
     # Config & parameter set-up

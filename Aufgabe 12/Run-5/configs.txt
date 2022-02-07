@@ -1,1 +1,0 @@
-{'num_chars': 81, 'num_class': 398, 'embeddings_dim': 256, 'word_encoder_hidden_dim': 512, 'span_encoder_hidden_dim': 512, 'fc_hidden_dim': 512, 'dropout': 0.0, 'span_encoder_num_layers': 2, 'optimizer': 'optim.Adam', 'lr': 0.0001, 'lr_decay': 0.9, 'patience': 5, 'validation_amount': 2, 'decay_from_step': 10}

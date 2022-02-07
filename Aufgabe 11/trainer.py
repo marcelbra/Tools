@@ -50,6 +50,8 @@ class Trainer:
 
         for epoch in range(1, self.epochs + 1):
             print(f"\nStarting epoch: {epoch}")
+            # Originally, `current_train_matrices` was saved to list holding all epochs
+            # But now everything is dynamically printed to stdout
             current_train_metrics = self.do_epoch(epoch, model, data, loss_func, scheduler, optimizer)
 
         data.store_parameters(self.path_parameters)
