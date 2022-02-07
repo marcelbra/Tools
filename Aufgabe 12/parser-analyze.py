@@ -1,84 +1,89 @@
 """
+P7 EET - Aufgabe 12
+Parser: Anwendung
 
-
+Group:
+Marcel Braasch
+Nadja Seeberg
+Sinem Kühlewind
 """
-import torch
 
+import torch
+import sys
 from parser import Parser
 from Data import Data
 from utils import load_config, get_test_data, load_data, Index
 
-
 class Printer:
 
     def __init__(self, labels, splits, index, sentence):
-
         self.labels = labels
         self.splits = splits
         self.index = index
         self.sentence = sentence
 
-    def output(self, i, k):
-        # if self.labels[self.index(i, k)] != "<unk>":
-        print(f"({self.labels[self.index(i, k)]}", end="")
-        if k == i + 1:
+    def build_parse(self, i, k):
+        label = self.labels[self.index(i, k)]
+        number_closing = 0
+        if label != "<unk>":  # Omit unknown consituents
+            number_closing += 1
+            if len(label.split()) == 2:  # Resolve merged consituents
+                label = label.split()[0] + "(" + label.split()[1]
+                number_closing += 1
+            print(f"({label}", end="")
+        if k==i+1:
             print(f" {self.sentence[i]}", end="")
         else:
-            spit_index = self.splits[self.index(i, k)]
-            self.output(i, spit_index)
-            self.output(spit_index, k)
-        print(")", end="")
+            split_index = self.splits[self.index(i,k)]
+            self.build_parse(i, split_index)
+            self.build_parse(split_index, k)
+        print(")" * number_closing, end="")
 
 
 class Analyzer:
 
-    def __init__(self, config):
-
-        # Load model
+    def __init__(self, paths):
         self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
-        model_config = load_config(config["model_config_path"])
-        model_path = config["model_path"]
-        self.model = torch.load(model_path, map_location=self.device)
+        self.model = torch.load(paths["model"], map_location=self.device)
         self.model.to(self.device)
         self.model.eval()
+        self.test_data, self.trees = get_test_data(paths["test_file"])
+        self.data_class = Data(paths["parameters"])
 
-        # Load data
-        self.test_data, self.trees = get_test_data(config["test_file_path"])
-        self.data_class = load_data(config["data_path"])
+    def parse(self, sentences):
 
-    def parse(self, sentence):
+        if isinstance(sentences, str):
+            sentences = [sentences.split()]
+        else:
+            sentences = self.test_data[:15]
 
-        data = Data(analyzer_config["data_params_path"])
+        for sentence in sentences:
+            inputs = self.data_class.words2charIDvec(sentence, self.device)
+            logits = self.model(*inputs)
+            labels = [self.data_class.ID2label[i] for i in torch.argmax(logits, dim=1)]
+            scores = torch.max(logits, dim=1)[0]
+            splits = [""] * len(labels)
+            n = len(sentence)
+            index = Index(n)
+            for l in range(2, n + 1):
+                for i in range(n - l + 1):
+                    k = i + l
+                    all_splits = [float(scores[index(i, j)] + scores[index(j, k)]) for j in range(i + 1, k)]
+                    argmax_j = i + all_splits.index(max(all_splits)) + 1
+                    scores[index(i, k)] += scores[index(i, argmax_j)] + scores[index(argmax_j, k)]
+                    splits[index(i,k)] = argmax_j
+            printer = Printer(labels, splits, index, sentence)
+            printer.build_parse(0, n)
+            print()
 
-        o = 0
-
-        sentence = self.test_data[85]
-        inputs = data.words2charIDvec(sentence, self.device)
-        logits = self.model(*inputs)
-        labels = [data.ID2label[i] for i in torch.argmax(logits, dim=1)]
-        scores = torch.max(logits, dim=1)[0]
-        splits = [""] * len(labels)
-        n = len(sentence)
-        index = Index(n)
-
-        for l in range(2, n + 1):
-            for i in range(n - l + 1):
-                k = i + l
-                all_splits = [float(scores[index(i, j)] + scores[index(j, k)]) for j in range(i + 1, k)]
-                argmax_j = i + all_splits.index(max(all_splits)) + 1
-                scores[index(i, k)] += scores[index(i, argmax_j)] + scores[index(argmax_j, k)]
-                splits[index(i, k)] = argmax_j
-
-        printer = Printer(labels, splits, index, sentence)
-        printer.output(0, n)
-        print(f"\n{self.trees[o]}")
-
-
-analyzer_config = {"model_config_path": "./Run-6/configs.txt",
-                   "model_path": "./Run-6/model.pt",
-                   "test_file_path": "./PennTreebank/train.txt",
-                   "data_params_path": "./Run-6/parameters.pkl",
-                   "data_path": "./PennTreebank/data.pkl"}
-
-analyzer = Analyzer(analyzer_config)
-analyzer.parse("Test sentence")
+def main():
+    paths = {"model": "./Data/model.pt",
+             "test_file": "./Data/test.txt",
+             "parameters": "./Data/parameters.pkl"}
+    analyzer = Analyzer(paths)
+    if len(sys.argv)==2:
+        analyzer.parse(sys.argv[1])
+    else:
+        analyzer.parse(None)
+       
+main()
